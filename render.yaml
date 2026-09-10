@@ -1,18 +1,21 @@
-﻿services:
+services:
   - type: web
     name: openmosque-backend
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
-    region: oregon
+    region: singapore
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
       - key: PORT
         value: 8080
       - key: SPRING_DATASOURCE_URL
-        sync: false
+        value: jdbc:postgresql://ep-flat-lake-b30dm3gr-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
       - key: SPRING_DATASOURCE_USERNAME
-        sync: false
+        value: neondb_owner
       - key: SPRING_DATASOURCE_PASSWORD
-        sync: false
+        value: npg_VyOW7SnUNtg4
+      - key: APP_CORS_ALLOWED_ORIGINS
+        value: "*"
+
