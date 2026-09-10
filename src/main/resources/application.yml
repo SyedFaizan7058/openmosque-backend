@@ -1,0 +1,87 @@
+# ==============================================================================
+# OpenMosque Backend - Base Application Configuration
+# ==============================================================================
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: open-mosque-backend
+  profiles:
+    # Active profile: 'dev' for local machine, 'prod' for GCP Cloud Run / Kubernetes
+    active: dev
+  main:
+    allow-bean-definition-overriding: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
+  cache:
+    type: ${SPRING_CACHE_TYPE:redis}
+    redis:
+      time-to-live: 86400000 # 24 hours in milliseconds
+      cache-null-values: false
+
+# ==============================================================================
+# Production Observability & Health Actuator
+# ==============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# ==============================================================================
+# Swagger / OpenAPI 3 Interactive Documentation
+# Access via browser at: http://localhost:8080/swagger-ui.html
+# ==============================================================================
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+
+# ==============================================================================
+# Application Custom Security & Integration Settings
+# ==============================================================================
+app:
+  prayer:
+    aladhan:
+      base-url: ${ALADHAN_API_BASE_URL:https://api.aladhan.com/v1}
+      connect-timeout-seconds: 5
+      read-timeout-seconds: 10
+  osm:
+    overpass:
+      base-url: ${OVERPASS_API_BASE_URL:https://overpass-api.de/api/interpreter}
+      connect-timeout-seconds: 10
+      read-timeout-seconds: 45
+      user-agent: OpenMosque-Ingestion-Bot/1.0 (https://openmosque.org; contact@openmosque.org)
+  security:
+    firebase:
+      # Set to 'true' once you download your Firebase Admin SDK service account JSON
+      enabled: true
+      
+      # Place your 'firebase-service-account.json' file inside 'src/main/resources/' or specify external path
+      service-account-path: ${FIREBASE_CREDENTIALS_PATH:file:D:\.secrets\firebase-service-account.json}
+      
+      # Dev Mock Auth: When true, allows testing with dummy Bearer tokens (e.g. 'mock-admin-token') without Firebase
+      dev-mock-auth: true
+      
+  cors:
+    allowed-origins: "${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,https://*.vercel.app,http://localhost:19006,exp://*}"
+    allowed-methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    allowed-headers: "*"
+    allow-credentials: true

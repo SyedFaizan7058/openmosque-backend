@@ -1,0 +1,419 @@
+================================================================================
+OPENMOSQUE BACKEND - ALL 48 API ENDPOINTS & THEIR DIRECT PURPOSES
+================================================================================
+Base URL: http://localhost:8080
+Documentation: http://localhost:8080/swagger-ui.html
+================================================================================
+
+--------------------------------------------------------------------------------
+MODULE 1: DOCUMENTATION & SYSTEM HEALTH
+--------------------------------------------------------------------------------
+
+1. GET  /v3/api-docs
+   --> Used for getting raw OpenAPI 3.0 JSON specification for Postman imports.
+   - Access: Public (No login required)
+
+2. GET  /swagger-ui.html
+   --> Used for opening interactive Swagger API dashboard in browser to test all APIs.
+   - Access: Public (No login required)
+
+--------------------------------------------------------------------------------
+MODULE 2: USER & AUTHENTICATION MODULE
+--------------------------------------------------------------------------------
+
+3. POST /api/v1/users/sync
+   --> Used for synchronizing & onboarding new Firebase users into PostgreSQL database.
+   - Access: Public (Called after user logs in on Mobile/Web frontend)
+   - Request Body:
+     {
+       "firebaseUid": "FIREBASE_USER_UID",
+       "email": "user@openmosque.org",
+       "displayName": "Ahmad User",
+       "phoneNumber": "+1234567890",
+       "photoUrl": "https://example.com/avatar.jpg"
+     }
+
+4. GET  /api/v1/users/me
+   --> Used for getting current logged-in user's profile, contribution points, and role.
+   - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+
+--------------------------------------------------------------------------------
+MODULE 3: FACILITIES & AMENITIES CATALOG MODULE
+--------------------------------------------------------------------------------
+
+5. GET  /api/v1/facilities
+   --> Used for getting all active Islamic facilities/amenities (Wudu area, Women section, Parking, Wheelchair accessibility, etc.).
+   - Access: Public (No login required)
+
+--------------------------------------------------------------------------------
+MODULE 4: MOSQUE DIRECTORY & GEOSPATIAL DISCOVERY MODULE
+--------------------------------------------------------------------------------
+
+6. GET  /api/v1/mosques/nearby
+   --> Used for finding nearby mosques within a radius using user's GPS Latitude & Longitude.
+   - Access: Public (No login required)
+   - Example Query: /api/v1/mosques/nearby?latitude=51.5173&longitude=-0.0658&radiusKm=10&facilities=PARKING,WOMENS_SECTION
+   - Result: Returns list of closest mosques sorted by distance in kilometers with cover photos.
+
+7. GET  /api/v1/mosques/search
+   --> Used for searching mosques by keyword (name, address), city, or country with pagination.
+   - Access: Public (No login required)
+   - Example Query: /api/v1/mosques/search?q=Central&city=London&page=0&size=20
+
+8. GET  /api/v1/mosques/{idOrSlug}
+   --> Used for getting full mosque profile (details, photo gallery, facilities list, and live broadcast link).
+   - Access: Public (No login required)
+   - Example: /api/v1/mosques/east-london-mosque-london or /api/v1/mosques/18558e48-a2aa-4219-9583-54cd9a84a76c
+
+--------------------------------------------------------------------------------
+MODULE 5: CROWDSOURCING & USER CONTRIBUTIONS MODULE
+--------------------------------------------------------------------------------
+
+9. POST /api/v1/mosques/submissions
+   --> Used for submitting a new mosque proposal by any user to be reviewed by moderators.
+   - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+   - Note: Contributor automatically earns +100 reward points when approved.
+   - Request Body:
+     {
+       "name": "Birmingham Central Mosque",
+       "description": "Historic mosque in Birmingham",
+       "address": "180 Belgrave Middleway",
+       "city": "Birmingham",
+       "country": "United Kingdom",
+       "latitude": 52.4678,
+       "longitude": -1.8906,
+       "contactPhone": "+44 121 440 5355",
+       "websiteUrl": "https://birminghamcentralmosque.org.uk",
+       "liveStreamUrl": "https://youtube.com/live/stream-id",
+       "facilityCodes": ["PARKING", "WUDU_AREA", "WOMENS_SECTION"],
+       "imageUrls": ["https://images.unsplash.com/mosque.jpg"]
+     }
+
+10. POST /api/v1/mosques/{id}/suggest-edit
+    --> Used for suggesting corrections or updates to an existing mosque profile.
+    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+    - Note: Contributor automatically earns +50 reward points when approved.
+
+--------------------------------------------------------------------------------
+MODULE 6: MOSQUE CLAIMING & ADMIN ACCESS MODULE (WAY B)
+--------------------------------------------------------------------------------
+
+11. POST /api/v1/mosques/{id}/claim
+    --> Used by Imams and Committee members to request administrative ownership of a mosque.
+    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+    - Request Body:
+      {
+        "fullName": "Imam Tariq Al-Banna",
+        "phoneNumber": "+44 20 7654 3210",
+        "officialEmail": "imam@eastlondonmosque.org",
+        "positionInMosque": "Head Imam & Trustee",
+        "proofDocumentUrl": "https://docs.example.com/charity-certificate.pdf"
+      }
+
+12. GET  /api/v1/admin/mosques/claims
+    --> Used by Moderators and Admins to view the queue of pending mosque claim requests.
+    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+    - Example Query: /api/v1/admin/mosques/claims?status=PENDING&page=0&size=20
+
+13. PATCH /api/v1/admin/mosques/claims/{id}/decision
+    --> Used by Moderators to approve/reject a mosque claim.
+    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+    - Action on Approval: Automatically upgrades the claimant's role to MOSQUE_ADMIN and marks mosque as verified.
+    - Request Body:
+      {
+        "status": "APPROVED", // or "REJECTED"
+        "reviewComments": "Official charity certificate verified."
+      }
+
+--------------------------------------------------------------------------------
+MODULE 7: USER & ROLE MANAGEMENT (SUPER ADMIN - WAY A)
+--------------------------------------------------------------------------------
+
+14. PATCH /api/v1/admin/users/{id}/role
+    --> Used by Super Admins to directly change any user's role (USER, MOSQUE_ADMIN, MODERATOR, SUPER_ADMIN).
+    - Access: Restricted (Requires ROLE_SUPER_ADMIN)
+    - Request Body:
+      {
+        "role": "MODERATOR" // or "MOSQUE_ADMIN", "SUPER_ADMIN", "USER"
+      }
+
+15. GET  /api/v1/admin/users
+    --> Used by Super Admins to list and search all registered users by role with pagination.
+    - Access: Restricted (Requires ROLE_SUPER_ADMIN)
+    - Example Query: /api/v1/admin/users?role=MOSQUE_ADMIN&page=0&size=20
+
+--------------------------------------------------------------------------------
+MODULE 8: MODERATION & ADMIN REVIEW QUEUE MODULE
+--------------------------------------------------------------------------------
+
+16. GET  /api/v1/admin/moderation/submissions
+    --> Used by moderators to view the list of pending crowdsourced mosque submissions.
+    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+    - Example Query: /api/v1/admin/moderation/submissions?status=PENDING&page=0&size=20
+
+17. PATCH /api/v1/admin/moderation/submissions/{id}/decision
+    --> Used by moderators to approve or reject a mosque submission & award contributor points.
+    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+    - Request Body:
+      {
+        "status": "APPROVED", // or "REJECTED"
+        "reviewComments": "Address and facilities verified. Excellent submission."
+      }
+    - Action on Approval: Automatically creates live Mosque entry and awards points to user.
+
+--------------------------------------------------------------------------------
+MODULE 9: PRAYER TIMES ENGINE & MOSQUE ADMIN IQAMAH SCHEDULE (PHASE 3)
+--------------------------------------------------------------------------------
+
+18. GET  /api/v1/mosques/{idOrSlug}/prayer-times
+    --> Used for getting daily calculated Adhan times, Mosque Iqamah overrides, and next prayer countdown.
+    - Access: Public (No login required)
+    - Query Parameters: ?date=2026-09-02 (optional, defaults to today)
+    - Response: Includes Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha, Next prayer countdown, and Friday Jumu'ah batches.
+
+19. GET  /api/v1/prayer-times/methods
+    --> Used for getting list of supported astronomical calculation methods (ISNA, MWL, Umm Al-Qura, Karachi, Egypt, etc.).
+    - Access: Public (No login required)
+
+20. GET  /api/v1/mosque-admin/mosques/{id}/prayer-config
+    --> Used by Mosque Admins to retrieve their mosque's calculation method, school (Hanafi/Standard), and angles.
+    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+
+21. PUT  /api/v1/mosque-admin/mosques/{id}/prayer-config
+    --> Used by Mosque Admins to update their calculation method, school (Hanafi/Standard), and timezone.
+    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+    - Request Body:
+      {
+        "calculationMethod": "MUSLIM_WORLD_LEAGUE", // "ISNA", "UMM_AL_QURA", "KARACHI", etc.
+        "juristicSchool": "STANDARD",              // or "HANAFI"
+        "timeZone": "Europe/London"
+      }
+
+22. GET  /api/v1/mosque-admin/mosques/{id}/iqamah-schedule
+    --> Used by Mosque Admins to get current congregation Iqamah rules, offsets, and Jumu'ah batches.
+    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+
+23. PUT  /api/v1/mosque-admin/mosques/{id}/iqamah-schedule
+    --> Used by Mosque Admins to configure congregation Iqamah offsets (e.g. +20 mins), fixed times, and Friday Jumu'ah batches.
+    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+    - Request Body:
+      {
+        "fajrType": "OFFSET_AFTER_ADHAN",
+        "fajrOffsetMinutes": 20,
+        "dhuhrType": "FIXED_TIME",
+        "dhuhrFixedTime": "13:30:00",
+        "asrType": "OFFSET_AFTER_ADHAN",
+        "asrOffsetMinutes": 15,
+        "maghribType": "OFFSET_AFTER_ADHAN",
+        "maghribOffsetMinutes": 10,
+        "ishaType": "OFFSET_AFTER_ADHAN",
+        "ishaOffsetMinutes": 15,
+        "jummah1Time": "13:15:00",
+        "jummah2Time": "14:00:00",
+        "jummahKhutbahLanguage": "English & Arabic"
+      }
+
+--------------------------------------------------------------------------------
+MODULE 10: MEDIA UPLOADS & CLOUD STORAGE ENGINE (PHASE 4)
+--------------------------------------------------------------------------------
+
+24. POST /api/v1/media/upload-url
+    --> Used for generating a pre-signed PUT URL for direct-to-cloud photo uploads (GCS/local mock).
+    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+    - Request Body:
+      {
+        "fileName": "front_facade.jpg",
+        "contentType": "image/jpeg",
+        "folderCategory": "MOSQUE_IMAGE" // "PROOF_DOCUMENT", "EVENT_BANNER", "USER_AVATAR"
+      }
+    - Response: { uploadUrl, publicUrl, objectKey, expiresAt }
+
+25. PUT  /api/v1/media/mock-upload
+    --> Dev mock upload destination for local testing without cloud credentials.
+    - Access: Public
+
+--------------------------------------------------------------------------------
+MODULE 11: MOSQUE COMMUNITY EVENTS & FRIDAY KHUTBAH MANAGEMENT (PHASE 4)
+--------------------------------------------------------------------------------
+
+26. GET  /api/v1/mosques/{idOrSlug}/events
+    --> Used for exploring upcoming mosque programs, halaqahs, workshops, and youth activities.
+    - Access: Public (No login required)
+    - Query Parameters: ?type=HALAQAH&page=0&size=10
+
+27. GET  /api/v1/events/{id}
+    --> Used for viewing full details of a specific scheduled mosque event.
+    - Access: Public (No login required)
+
+28. GET  /api/v1/mosques/{idOrSlug}/khutbahs
+    --> Used for retrieving scheduled Friday Jumu'ah khutbah topics, speakers, times, and live stream links.
+    - Access: Public (No login required)
+
+29. POST /api/v1/mosque-admin/mosques/{id}/events
+    --> Used by Mosque Admins to schedule a new community event or halaqah.
+    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+    - Request Body:
+      {
+        "title": "Ramadan Quran Tafseer",
+        "description": "Daily reflection post-Asr",
+        "eventType": "HALAQAH",
+        "audience": "ALL",
+        "startDateTime": "2026-09-10T17:00:00Z",
+        "endDateTime": "2026-09-10T18:30:00Z",
+        "speakerName": "Shaykh Abdul Rahman",
+        "locationDetails": "Main Prayer Hall"
+      }
+
+30. PUT  /api/v1/mosque-admin/mosques/{id}/events/{eventId}
+    --> Used by Mosque Admins to modify an event's details or timing.
+    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+
+31. DELETE /api/v1/mosque-admin/mosques/{id}/events/{eventId}
+    --> Used by Mosque Admins to cancel/delete a scheduled event.
+    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+
+32. POST /api/v1/mosque-admin/mosques/{id}/khutbahs
+    --> Used by Mosque Admins to schedule upcoming Friday Khutbah topic, speaker, and broadcast links.
+    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+    - Request Body:
+      {
+        "khutbahDate": "2026-09-11",
+        "topic": "Upholding Justice and Mercy",
+        "khatibName": "Imam Tariq",
+        "batchNumber": 1,
+        "khutbahTime": "13:00:00",
+        "adhaanTime": "12:45:00",
+        "iqamahTime": "13:30:00",
+        "language": "English & Arabic",
+        "streamUrl": "https://youtube.com/live/stream-id"
+      }
+
+33. PUT  /api/v1/mosque-admin/mosques/{id}/khutbahs/{khutbahId}
+    --> Used by Mosque Admins to update Friday Khutbah details.
+    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+
+34. DELETE /api/v1/mosque-admin/mosques/{id}/khutbahs/{khutbahId}
+    --> Used by Mosque Admins to remove a Friday Khutbah entry.
+    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+
+--------------------------------------------------------------------------------
+MODULE 12: COMMUNITY REVIEWS, RATINGS & Q&A MODERATION ENGINE (PHASE 4)
+--------------------------------------------------------------------------------
+
+35. GET  /api/v1/mosques/{idOrSlug}/reviews
+    --> Used for getting paginated community reviews with category breakdown.
+    - Access: Public (No login required)
+
+36. GET  /api/v1/mosques/{id}/ratings
+    --> Used for getting aggregated category rating averages (Overall, Cleanliness, Facilities, Women's Area, Parking).
+    - Access: Public (No login required)
+
+37. GET  /api/v1/mosques/{idOrSlug}/questions
+    --> Used for getting public community Q&A threads with verified Imam answers.
+    - Access: Public (No login required)
+
+38. POST /api/v1/mosques/{id}/reviews
+    --> Used by worshippers to post a review and category star ratings (1 review per mosque).
+    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+    - Request Body:
+      {
+        "ratingOverall": 5,
+        "ratingCleanliness": 5,
+        "ratingFacilities": 4,
+        "ratingWomensArea": 5,
+        "ratingParking": 4,
+        "reviewText": "Pristine wudu area and very warm atmosphere."
+      }
+
+39. PUT  /api/v1/mosques/{id}/reviews/{reviewId}
+    --> Used by review author to update their rating and comments.
+    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+
+40. DELETE /api/v1/mosques/{id}/reviews/{reviewId}
+    --> Used by review author to delete their review.
+    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+
+41. POST /api/v1/mosques/{id}/questions
+    --> Used by worshippers to ask a question about the mosque.
+    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+    - Request Body:
+      {
+        "questionText": "Is wheelchair accessibility available for the sisters area?"
+      }
+
+42. POST /api/v1/community/questions/{questionId}/answers
+    --> Used to answer a question. Automatically tagged as official if answered by Mosque Admin or Imam.
+    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+    - Request Body:
+      {
+        "answerText": "Yes, elevator access is available at Entrance B."
+      }
+
+43. POST /api/v1/community/flag
+    --> Used to report inappropriate, abusive, or spam content to community moderators.
+    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+    - Request Body:
+      {
+        "targetType": "REVIEW", // "QUESTION", "ANSWER"
+        "targetId": "uuid-here",
+        "reason": "Offensive language or spam"
+      }
+
+44. GET  /api/v1/admin/community/flags
+    --> Used by moderators to review queue of flagged reviews, questions, and answers.
+    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+
+45. PATCH /api/v1/admin/community/flags/{id}/decision
+    --> Used by moderators to decide on reported content (RESOLVED hides content, DISMISSED keeps content).
+    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+    - Request Body:
+      {
+        "status": "RESOLVED", // or "DISMISSED"
+        "reviewerNotes": "Confirmed guidelines violation. Review hidden."
+      }
+
+--------------------------------------------------------------------------------
+MODULE 13: OPENSTREETMAP (OSM) AUTOMATED BATCH INGESTION ENGINE
+--------------------------------------------------------------------------------
+
+46. POST /api/v1/admin/ingest/osm/city
+    --> Used by Moderators and Admins to automatically query Overpass API and bulk-ingest all mosques in a city.
+    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+    - Request Body:
+      {
+        "city": "London",
+        "country": "United Kingdom",
+        "dryRun": false // Set true to preview elements without modifying database
+      }
+    - Response: { totalElementsFetched, mosquesInserted, duplicatesSkipped, facilitiesAttached, insertedMosqueNames, durationMs }
+
+47. POST /api/v1/admin/ingest/osm/radius
+    --> Used to bulk-ingest mosques surrounding a center GPS coordinate within a given radius in meters.
+    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+    - Request Body:
+      {
+        "latitude": 51.5074,
+        "longitude": -0.1278,
+        "radiusMeters": 15000,
+        "defaultCity": "London",
+        "defaultCountry": "United Kingdom",
+        "dryRun": false
+      }
+    - Response: { totalElementsFetched, mosquesInserted, duplicatesSkipped, facilitiesAttached, insertedMosqueNames, durationMs }
+
+48. POST /api/v1/admin/ingest/osm/bbox
+    --> Used to bulk-ingest mosques within a geographic rectangular bounding box [south, west, north, east].
+    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+    - Request Body:
+      {
+        "south": 51.40,
+        "west": -0.30,
+        "north": 51.60,
+        "east": 0.10,
+        "defaultCity": "Greater London",
+        "defaultCountry": "United Kingdom",
+        "dryRun": false
+      }
+    - Response: { totalElementsFetched, mosquesInserted, duplicatesSkipped, facilitiesAttached, insertedMosqueNames, durationMs }
+
+================================================================================

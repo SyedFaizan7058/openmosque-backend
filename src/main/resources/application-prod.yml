@@ -1,0 +1,47 @@
+﻿# ==============================================================================
+# OpenMosque Backend - Production Cloud Profile (application-prod.yml)
+# Supports Neon.tech / Render / AWS / GCP PostgreSQL
+# ==============================================================================
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      idle-timeout: 300000
+      max-lifetime: 900000
+      connection-timeout: 20000
+      
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          batch_size: 25
+          
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
+
+  cache:
+    type: ${SPRING_CACHE_TYPE:simple}
+
+app:
+  rate-limit:
+    enabled: true
+    backend: ${RATE_LIMIT_BACKEND:local}
+
+logging:
+  level:
+    com.openmosque: INFO
+    org.springframework.security: WARN
+    org.flywaydb: INFO
