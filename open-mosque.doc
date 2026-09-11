@@ -1,5 +1,5 @@
 # OpenMosque Backend — Complete End-to-End Technical Review Specification
-# Document Version: 5.0 (Full Monolith Architecture & Production Deployment Specification)
+# Document Version: 6.0 (Production Verified, 2FA/TOTP, FCM Push Notifications & Security Hardened)
 # Target Audience: AI Code Reviewers, Systems Architects, Security Auditors & Frontend Engineers
 
 ================================================================================
@@ -10,32 +10,43 @@ TABLE OF CONTENTS
 3. Complete Technology Stack & Version Matrix
 4. Source Code Package Anatomy
 5. Security, Authentication & Role-Based Access Control (RBAC)
+   5.1. Stateless Firebase Bearer Authentication & Dev-Mock Profile Safeguards
+   5.2. Industry-Standard 2FA / TOTP (RFC 6238 / RFC 4226)
+   5.3. Custom @CurrentUser Parameter Resolver
+   5.4. User Role Hierarchy & Privilege Escalation Defenses
+   5.5. Self-Approval & Conflict of Interest Prevention
+   5.6. Media Security, Magic-Byte Inspection & Path Traversal Mitigations
+   5.7. Strict Multi-Tier Token Bucket Rate Limiting
+   5.8. Production Security Headers & CORS Lockdown
 6. PostGIS Geospatial Engine & Spatial Query Architecture
-7. Database Schema & Flyway Migration Log (V1 to V13)
-8. Comprehensive Breakdown of All 10 Core Modules
+7. Database Schema & Flyway Migration Log (V1 to V14)
+8. Comprehensive Breakdown of All 11 Core Modules
    8.1. User & Identity Module
-   8.2. Mosque Directory & Facilities Module
-   8.3. Mosque Ownership Claim & Verification Module
-   8.4. Dynamic Prayer Times & Iqamah Engine
-   8.5. Community Engagement: Reviews, Ratings, Q&A & Flagging
-   8.6. Events & Friday Khutbahs Module
-   8.7. Media Upload & Multi-part Storage Module
-   8.8. Crowdsourcing Moderation & Contributor Gamification Module
-   8.9. User Notifications & Bookmarks/Favorites Module
-   8.10. OpenStreetMap (OSM) Automated Ingestion & Deduplication Engine
-9. Exhaustive API Reference Catalog (All 48 REST Endpoints)
-10. DevOps, Cloud Deployment & Database Infrastructure (Neon + Render)
-11. Test Coverage & Quality Assurance
+   8.2. Two-Factor Authentication (2FA/TOTP) Module
+   8.3. Mosque Directory & Facilities Module
+   8.4. Mosque Ownership Claim & Verification Module
+   8.5. Dynamic Prayer Times & Iqamah Engine
+   8.6. Community Engagement: Reviews, Ratings, Q&A & Flagging
+   8.7. Events & Friday Khutbahs Module
+   8.8. Media Upload & Multi-part Storage Module
+   8.9. Crowdsourcing Moderation & Contributor Gamification Module
+   8.10. User Notifications & Multi-Device Push Notifications (FCM)
+   8.11. OpenStreetMap (OSM) Automated Ingestion & Deduplication Engine
+9. Exhaustive API Reference Catalog (All 58 REST Endpoints)
+10. DevOps, Cloud Deployment & Database Infrastructure (Neon + Render + Cloudflare R2)
+11. Test Coverage & Quality Assurance (12 Automated Suites, 45 Tests)
 12. AI Reviewer Checklist & Code Audit Prompts
 
 ================================================================================
 1. SYSTEM OVERVIEW & CORE MISSION
 ================================================================================
-OpenMosque is a production-ready, open-source, community-driven backend engine designed to eliminate the fragmentation of mosque directories, prayer timetables, Islamic amenities, and local community broadcasts worldwide.
+OpenMosque is an enterprise-grade, open-source, community-driven backend engine designed to eliminate the fragmentation of mosque directories, prayer timetables, Islamic amenities, and local community broadcasts worldwide.
 
 Key Architectural Value Drivers:
 - Native PostGIS Spatial Queries: Sub-millisecond geographic proximity searches without external geocoding bottlenecks.
 - Zero-Password Stateless Authentication: Delegated to Firebase Identity Platform with Spring Security 6 stateless JWT interception.
+- Industry-Standard 2FA / TOTP: Authenticator app enrollment (RFC 6238), QR code pairing, 30s drift window, and single-use hashed recovery codes.
+- Multi-Device Push Notifications (FCM): Real-time push alerts to mobile devices for Iqamah timetable changes, prayer notifications, and community announcements with automated stale token cleanup.
 - Official Mosque Administration Lifecycle: Verification workflows allowing Imams and trustees to claim official control over mosque profiles, manage daily Iqamah timings, and broadcast community events.
 - Crowdsourced Directory with Moderation & Gamification: Users submit new mosques or correction proposals; community moderators approve/reject via an audit queue; contributors earn points and tier badges.
 - Automated OpenStreetMap Ingestion: Autonomous crawler fetching global mosque geometries from the Overpass API with spatial deduplication (50-meter threshold).
@@ -45,138 +56,153 @@ Key Architectural Value Drivers:
 ================================================================================
 The backend is architected as a Clean Modular Monolith in Spring Boot 3.3.3. While contained within a single deployable artifact for operational simplicity, modules maintain strict boundaries, modular package encapsulation, and decoupled services.
 
-       [ Client Applications: React 18 Web / React Native Mobile ]
+       [ Client Applications: React 18 / Vue 3 / Flutter / React Native Mobile ]
                                  │
-                                 │ (HTTPS + Firebase JWT)
+                                 │ (HTTPS + Firebase JWT + TOTP Challenge)
                                  ▼
-         ┌──────────────────────────────────────────────┐
-         │      Spring Security 6 Stateless Pipeline    │
-         │  (FirebaseAuthFilter + RateLimitingFilter)   │
-         └──────────────────────┬───────────────────────┘
-                                │
-        ┌───────────────────────┼────────────────────────┐
-        ▼                       ▼                        ▼
-  [User & Identity]     [Mosque Directory]       [Prayer Times Engine]
-   - Firebase Sync       - PostGIS ST_DWithin     - AlAdhan Calculation
-   - RBAC Roles          - Amenity Filters        - Iqamah Offsets/Fixed
-   - Gamification        - Cover Media            - Jumu'ah Schedules
-        │                       │                        │
-        ▼                       ▼                        ▼
-  [Claim Management]    [Community & Q&A]        [Moderation & Audit]
-   - Legal Proofs        - 5-Star Reviews         - Crowdsource Submissions
-   - Trustee Approval    - Questions & Answers    - Field-Level Diff Audit
-   - Imam Verification   - Content Flags          - Points & Badges
-        │                       │                        │
-        ▼                       ▼                        ▼
-  [Events & Khutbahs]   [Media Storage]          [OSM Ingestion Engine]
-   - Live Streams        - Local/Cloud Upload     - Overpass API Geo Crawler
-   - Jummah Archives     - Multi-part Handlers    - Spatial Deduplication
-        │                       │                        │
-        └───────────────────────┴────────────────────────┘
-                                │
-                                ▼
-         ┌──────────────────────────────────────────────┐
-         │     Hibernate Spatial 6.5 + JTS Topology     │
-         └──────────────────────┬───────────────────────┘
-                                │
-                                ▼
-         ┌──────────────────────────────────────────────┐
-         │   PostgreSQL 16/18 + PostGIS Spatial Engine  │
-         │         (Hosted on Neon Cloud / AWS)         │
-         └──────────────────────────────────────────────┘
+         ┌─────────────────────────────────────────────────────────────┐
+         │             Spring Security 6 Stateless Pipeline            │
+         │  (FirebaseAuthFilter + RateLimitingFilter + SecurityHeaders)│
+         └──────────────────────────────┬──────────────────────────────┘
+                                        │
+        ┌───────────────────────────────┼───────────────────────────────┐
+        ▼                               ▼                               ▼
+  [User & Identity]             [2FA / TOTP Engine]             [Mosque Directory]
+   - Firebase Sync               - RFC 6238 TOTP                 - PostGIS ST_DWithin
+   - RBAC Roles                  - otpauth:// QR URI             - Amenity Filters
+   - Gamification Points         - Single-Use Backup Codes       - Cover Media
+        │                               │                               │
+        ▼                               ▼                               ▼
+  [Claim Management]            [Community & Q&A]               [Prayer Times Engine]
+   - Legal Proofs                - 5-Star Reviews                - AlAdhan Calculation
+   - Anti-Self Approval          - Questions & Answers           - Iqamah Offsets/Fixed
+   - Imam Verification           - Content Flags & Moderation    - Jumu'ah Schedules
+        │                               │                               │
+        ▼                               ▼                               ▼
+  [Events & Khutbahs]           [Media Storage]                 [OSM Ingestion Engine]
+   - Live Streams                - Cloudflare R2 / S3            - Overpass Geo Crawler
+   - Jummah Archives             - Magic-Byte Validation         - 50m Deduplication
+        │                               │                               │
+        ▼                               ▼                               │
+  [Push Notifications]          [Crowdsource Moderation]                │
+   - Firebase Cloud Messaging    - Field-Level Diff Audit               │
+   - Multi-Device Tokens         - Anti-Self Approval                   │
+   - Stale Token Pruning         - Contributor Badges                   │
+        │                               │                               │
+        └───────────────────────────────┴───────────────────────────────┘
+                                        │
+                                        ▼
+         ┌─────────────────────────────────────────────────────────────┐
+         │             Hibernate Spatial 6.5 + JTS Topology            │
+         └──────────────────────────────┬──────────────────────────────┘
+                                        │
+                                        ▼
+         ┌─────────────────────────────────────────────────────────────┐
+         │          PostgreSQL 16+ with PostGIS Spatial Extension      │
+         │               (Hosted on Neon Serverless Cloud)             │
+         └─────────────────────────────────────────────────────────────┘
 
 ================================================================================
 3. COMPLETE TECHNOLOGY STACK & VERSION MATRIX
 ================================================================================
-- Java Runtime: Java 17 LTS
+- Java Runtime: Java 17 LTS (Eclipse Temurin)
 - Core Framework: Spring Boot 3.3.3
 - Security Framework: Spring Security 6.x (Stateless Session Management)
 - Cloud Database: PostgreSQL 16+ (Hosted on Neon Serverless PostgreSQL with pooling)
-- Spatial Extension: PostGIS 3.4+
+- Spatial Extension: PostGIS 3.4+ / 3.6
 - Spatial ORM Layer: Hibernate Spatial 6.5.2.Final + JTS (LocationTech JTS 1.19.0)
 - Database Migrations: Flyway Core 10.x + Flyway PostgreSQL
 - Authentication Provider: Firebase Admin SDK 9.2.0 (Google Identity Platform)
+- Push Notifications: Firebase Cloud Messaging (FCM Multicast & Batching)
+- 2FA / TOTP: RFC 6238 HMAC-SHA1 + Apache Commons Codec Base32
+- Cloud Media Storage: Cloudflare R2 (S3-compatible via AWS Java SDK v2 / Local fallback)
 - Object Mapping: MapStruct 1.5.5.Final
 - Boilerplate Elimination: Project Lombok 1.18.30 (@SuperBuilder, @Getter, @RequiredArgsConstructor)
-- API Documentation: SpringDoc OpenAPI 3.0 / Swagger UI (springdoc-openapi-starter-webmvc-ui 2.3.0)
-- Rate Limiting: Bucket4j / In-memory token bucket filters
-- Containerization: Docker (Eclipse Temurin 17 JRE Alpine Multi-stage build)
-- Cloud Host: Render Web Service (render.yaml configured)
+- Documentation & Testing: SpringDoc OpenAPI 3 (Swagger UI), JUnit 5, AssertJ, Mockito
 
 ================================================================================
 4. SOURCE CODE PACKAGE ANATOMY
 ================================================================================
-Root Package: com.openmosque
-
-com.openmosque
-├── OpenMosqueApplication.java        # Spring Boot Entry Point & JtsModule Bean
-├── common/
-│   ├── config/                       # WebConfig, JtsGeoConfig, OpenApiConfig
-│   ├── exception/                    # GlobalExceptionHandler, ResourceNotFoundException,
-│   │                                 # UnauthorizedException, ForbiddenException, BadRequestException
-│   ├── model/                        # ApiResponse<T>, PageResponse<T>, BaseEntity
-│   └── util/                         # GeoUtils (WGS84 coordinate conversions, Point factories)
-├── security/
-│   ├── annotation/                   # @CurrentUser (Parameter injection annotation)
-│   ├── config/                       # SecurityConfig, CorsConfig
-│   ├── filter/                       # FirebaseAuthFilter, SecurityHeadersFilter
-│   ├── model/                        # CustomUserDetails, FirebaseAuthenticationToken
-│   ├── ratelimit/                    # RateLimitingFilter (IP & user tier throttling)
-│   ├── resolver/                     # CurrentUserArgumentResolver (HandlerMethodArgumentResolver)
-│   └── service/                      # FirebaseTokenVerifier (supports live & dev-mock modes)
-└── modules/
-    ├── claim/                        # Mosque ownership claims, trustee verification, documents
-    ├── community/                    # Reviews, ratings, Q&A discussions, upvoting, flags
-    ├── event/                        # Announcements, events, Friday Khutbah recordings
-    ├── ingestion/                    # OpenStreetMap Overpass sync, geometry deduplication
-    ├── media/                        # Multi-part file upload, validation, static file serving
-    ├── moderation/                   # Submissions queue, approval workflows, audit logs, gamification
-    ├── mosque/                       # Mosques CRUD, PostGIS spatial search, facilities catalog
-    ├── notification/                 # In-app notifications, user alerts
-    ├── prayer/                       # AlAdhan client, calculation methods, Iqamah schedules
-    └── user/                         # User profiles, sync, favorites, contributor badges
+src/main/java/com/openmosque/
+├── common/                     # Cross-cutting primitives
+│   ├── entity/                 # BaseEntity with UUID PK, audit timestamps, soft delete
+│   ├── exception/              # Standardized exception hierarchy (BadRequest, Forbidden, etc.)
+│   ├── model/                  # ApiResponse<T> envelope and PageResponse<T> metadata
+│   └── util/                   # GeoUtils spatial calculations and coordinate validators
+├── modules/
+│   ├── claim/                  # Mosque admin ownership claim workflows
+│   ├── community/              # Reviews, ratings, Q&A, and user flagging
+│   ├── event/                  # Mosque events and Friday Khutbah recordings
+│   ├── ingestion/              # OSM Overpass crawler and spatial deduplication
+│   ├── media/                  # Magic-byte file validation and R2/Local storage
+│   ├── moderation/             # Submissions, approvals, field diffs, audit logs
+│   ├── mosque/                 # Mosque profiles, PostGIS spatial queries, facilities
+│   ├── notification/           # In-app notifications and FCM multi-device push
+│   ├── prayer/                 # AlAdhan integration, prayer configs, Iqamah schedules
+│   └── user/                   # Identity sync, 2FA/TOTP services, gamification, badges
+└── security/
+    ├── config/                 # SecurityConfig (Stateless CSRF-disabled, CORS, CSP/HSTS)
+    ├── filter/                 # FirebaseAuthFilter and RateLimitingFilter
+    ├── ratelimit/              # In-memory Token Bucket rate limiting engine
+    └── service/                # FirebaseTokenVerifier and TotpUtil
 
 ================================================================================
 5. SECURITY, AUTHENTICATION & ROLE-BASED ACCESS CONTROL (RBAC)
 ================================================================================
-5.1. Zero Password Storage Architecture:
-- User passwords NEVER enter or touch the OpenMosque backend or database.
-- Authentication is handled exclusively by Google Firebase Identity Platform.
-- Users authenticate via Email/Password, Google OAuth, or Apple Sign-In on the client.
-- The client receives a cryptographically signed Firebase ID Token and transmits it via HTTP Header:
-  Authorization: Bearer <FIREBASE_ID_TOKEN>
+5.1. Stateless Firebase Bearer Authentication & Dev-Mock Profile Safeguards:
+- Client transmits Firebase ID token in Authorization: Bearer <token> or secure HttpOnly cookie.
+- Production Security Lockdown: FirebaseTokenVerifier strictly disables mock auth fallback when the prod profile is active. Any attempt to use mock tokens in production throws an immediate 401 Unauthorized.
+- Suspended Account Lockdown: FirebaseAuthFilter immediately rejects deactivated or soft-deleted user accounts with HTTP 403 Forbidden.
 
-5.2. Request Lifecycle & Interception (FirebaseAuthFilter):
-1. Incoming HTTP requests pass through FirebaseAuthFilter.
-2. The filter extracts the Bearer token and delegates validation to FirebaseTokenVerifier.
-3. Development Mock Auth Mode: In local/test environments (app.security.firebase.dev-mock-auth: true), special test tokens (e.g., dev-user-..., dev-admin-...) bypass Firebase network calls for rapid offline testing.
-4. On valid verification, the user's firebase_uid is looked up in PostgreSQL.
-5. If the user does not exist, an on-demand synchronization automatically provisions a User entity with role USER.
-6. An authenticated FirebaseAuthenticationToken is populated in SecurityContextHolder.
+5.2. Industry-Standard 2FA / TOTP (RFC 6238 / RFC 4226):
+- 160-bit Base32 secret generation using cryptographically secure PRNG.
+- Standard otpauth://totp/OpenMosque:<email>?secret=... URI compatible with Google Authenticator, Microsoft Authenticator, and Authy.
+- Time-drift tolerance: Validates +/- 1 window (30-second window drift tolerance).
+- Single-use backup recovery codes: 8 alphanumeric codes generated and stored exclusively as salted SHA-256 hashes. Consumed codes are permanently deleted on use.
+- Step-Up Authentication: Disabling 2FA or regenerating backup codes strictly requires a fresh, valid 6-digit TOTP code or backup code.
 
 5.3. Custom @CurrentUser Parameter Resolver:
-Controllers do not manually parse security contexts. Any controller method can declare:
-public ResponseEntity<ApiResponse<T>> execute(@CurrentUser User user)
-The custom CurrentUserArgumentResolver automatically validates and injects the authenticated User JPA entity.
+- Controllers inject the authenticated User JPA entity directly via @CurrentUser User user.
 
-5.4. User Role Hierarchy:
-- USER: Regular worshipper. Can view directory, post reviews, ask questions, submit new mosques, bookmark favorites.
-- MOSQUE_ADMIN: Mosque Imam or Trustee. Has verified ownership over a specific mosque. Can configure Iqamah schedules, publish events, and edit mosque profile details.
-- MODERATOR: Community Trustee. Can approve/reject user submissions, inspect photo uploads, and resolve content flags.
-- SUPER_ADMIN: System Administrator. Can approve Mosque Ownership Claims, appoint moderators, trigger bulk ingestion, and view global audit logs.
+5.4. User Role Hierarchy & Privilege Escalation Defenses:
+- Neutralized Role Escalation: Automatically granting SUPER_ADMIN based on email domains has been permanently eradicated. All newly provisioned users strictly default to UserRole.USER.
+- USER: Regular worshipper (search, review, bookmark, propose mosques).
+- MOSQUE_ADMIN: Verified Imam/Trustee with verified ownership of their specific mosque.
+- MODERATOR: Community Trustee (review crowdsource queue, resolve flags).
+- SUPER_ADMIN: System Administrator (manage claims, assign roles, view audit logs).
+
+5.5. Self-Approval & Conflict of Interest Prevention:
+- ModerationService prohibits moderators from approving or resolving their own crowdsourced mosque submissions.
+- MosqueClaimService prohibits claimants from reviewing or approving their own mosque administration claims.
+
+5.6. Media Security, Magic-Byte Inspection & Path Traversal Mitigations:
+- Real header byte inspection (FileSecurityValidator) enforcing valid signatures:
+  - JPEG: FF D8 FF
+  - PNG: 89 50 4E 47 0D 0A 1A 0A
+  - WebP: RIFF....WEBP
+  - PDF: %PDF
+- Rejection of Windows PE (MZ), Linux ELF, and Java bytecode executables.
+- Path Traversal and Null-Byte stripping on all uploaded filenames.
+
+5.7. Strict Multi-Tier Token Bucket Rate Limiting:
+- Strict Tier (15 req/min): /api/v1/auth/2fa/**, /api/v1/auth/session, /api/v1/users/sync, media uploads.
+- Standard Tier (60 req/min): User contributions, reviews, Q&A submissions.
+- Public Read Tier (120 req/min): Mosque directory, prayer times, search queries.
+
+5.8. Production Security Headers & CORS Lockdown:
+- Strict-Transport-Security (HSTS): max-age=31536000; includeSubDomains.
+- Content-Security-Policy (CSP): default-src 'self'.
+- X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy: strict-origin-when-cross-origin.
+- Wildcard CORS Credentials Forbidden: Rejects Access-Control-Allow-Origin: * when credentials are true in production.
 
 ================================================================================
 6. POSTGIS GEOSPATIAL ENGINE & SPATIAL QUERY ARCHITECTURE
 ================================================================================
 6.1. Geometry Representation:
-All mosque geographic coordinates are stored in PostgreSQL using the PostGIS geometry(Point, 4326) type, mapped in Hibernate via LocationTech JTS org.locationtech.jts.geom.Point.
+- Coordinates stored as PostGIS geometry(Point, 4326), mapped to LocationTech JTS Point.
+- GIST index ensures sub-millisecond execution: CREATE INDEX idx_mosques_location ON mosques USING GIST (location);
 
-6.2. Spatial Indexing:
-A Generalized Search Tree (GIST) index guarantees sub-millisecond execution times even with hundreds of thousands of mosques:
-CREATE INDEX idx_mosques_location ON mosques USING GIST (location);
-
-6.3. Spatial Proximity Search (ST_DWithin):
-The proximity finder executes native PostGIS spatial functions using the Earth spheroid model:
+6.2. Spatial Proximity Search (ST_DWithin):
 SELECT m.*, 
        ST_DistanceSphere(m.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)) / 1000.0 AS distance_km
 FROM mosques m
@@ -188,251 +214,168 @@ WHERE m.status = 'ACTIVE'
       )
 ORDER BY distance_km ASC;
 
-Benefits:
-- Eliminates Euclidean planar distortion on the spherical globe.
-- Calculates exact driving/crow-flies distance in kilometers in a single query.
-- Filters by amenities/facilities in the same query via SQL JOINs.
+================================================================================
+7. DATABASE SCHEMA & FLYWAY MIGRATION LOG (V1 to V14)
+================================================================================
+- V1: PostGIS extension activation and users table.
+- V2: Facilities catalog and mosques table with spatial geometries.
+- V3: Crowdsourced mosque_submissions and moderation_logs.
+- V4: Mosque ownership claim management (mosque_claim_requests).
+- V5: Prayer times config and Iqamah schedules.
+- V6: Rich production seed data across global metropolitan hubs.
+- V7: Community reviews, Q&A, events, khutbahs, content flags.
+- V8: Production seed data for community modules.
+- V9: User preferred GPS location and radius preferences.
+- V10: Custom manual Adhan time overrides.
+- V11: Bookmarks (user_favorite_mosques) and contributor badges.
+- V12: In-app user notifications table.
+- V13: Proof document URL migration to TEXT.
+- V14: Multi-device push notification registry (user_devices) and 2FA TOTP columns on users.
 
 ================================================================================
-7. DATABASE SCHEMA & FLYWAY MIGRATION LOG (V1 to V13)
+8. COMPREHENSIVE BREAKDOWN OF ALL 11 CORE MODULES
 ================================================================================
-All database schemas are strictly version-controlled via Flyway migrations in src/main/resources/db/migration:
-
-- V1__init_postgis_and_users.sql:
-  - Activates PostGIS extension (CREATE EXTENSION IF NOT EXISTS postgis;).
-  - Creates users table (id, firebase_uid, email, display_name, role, points, active, created_at, updated_at).
-- V2__init_mosques_and_facilities.sql:
-  - Creates facilities catalog (Wudu, Wheelchair, Women's Section, Parking, Halal Food, Janazah Service, Quran Classes, Library).
-  - Creates mosques table (id, name, slug, address, city, state, country, postal_code, latitude, longitude, location GEOMETRY, status, verified, capacity, established_year, contact_email, contact_phone, website_url, cover_image_url).
-  - Creates mosque_facilities join table.
-  - Creates mosque_photos table.
-- V3__add_submission_collection_tables.sql:
-  - Creates mosque_submissions table (crowdsourced proposals with JSONB payload of suggested changes, status PENDING, APPROVED, REJECTED).
-  - Creates moderation_logs table (auditing reviewer decisions and comments).
-- V4__init_mosque_claims.sql:
-  - Creates mosque_claims table for Imams/Trustees claiming official mosque administration (status, claimant_role, proof_document_url, contact_phone).
-- V5__init_prayer_times_and_iqamah.sql:
-  - Creates mosque_prayer_configs table (calculation_method, juristic_school, time_zone, high_latitude_rule).
-  - Creates mosque_iqamah_schedules table (fajr_type, fajr_fixed_time, fajr_offset_minutes, dhuhr_type, asr_type, maghrib_type, isha_type, jummah1_time, jummah2_time, jummah_khutbah_language).
-- V6__seed_rich_global_mosques.sql:
-  - Seeds rich production data for premier international mosques across London, New York, Istanbul, Medina, Kuala Lumpur, and Cairo.
-- V7__create_phase4_media_events_community_tables.sql:
-  - Creates mosque_reviews table (1-5 star ratings, review text, visit type).
-  - Creates mosque_questions and mosque_answers tables (community Q&A thread, accepted answer flag).
-  - Creates mosque_events table (title, start/end time, description, location type).
-  - Creates mosque_khutbahs table (Friday sermon archive, speaker name, language, audio/video stream URL).
-  - Creates community_content_flags table (flagging spam/offensive content).
-- V8__seed_phase4_community_data.sql:
-  - Seeds reviews, Q&As, events, and khutbah archives for initial onboarding.
-- V9__add_user_preferred_location.sql:
-  - Adds user preferred latitude, longitude, and search radius to users.
-- V10__add_custom_adhan_times.sql:
-  - Adds custom manual Adhan overrides in mosque_prayer_configs.
-- V11__init_favorites_and_badges.sql:
-  - Creates user_favorite_mosques table (bookmarks).
-  - Creates contributor_badges and user_badges tables (Bronze, Silver, Gold, Platinum).
-- V12__create_user_notifications.sql:
-  - Creates user_notifications table (read/unread, title, type, link).
-- V13__alter_claim_proof_document_url_to_text.sql:
-  - Alters proof document column from VARCHAR to TEXT for cloud base64/long URL support.
+8.1. User & Identity Module: Sync, profiles, points, preferences.
+8.2. Two-Factor Authentication (2FA/TOTP): RFC 6238 setup, QR enrollment, challenge verification, backup codes.
+8.3. Mosque Directory & Facilities: Directory, spatial search, amenity filtering, slug lookup.
+8.4. Mosque Ownership Claims: Verification workflow for Imams/Trustees with proof documents and anti-self-approval.
+8.5. Dynamic Prayer Times & Iqamah Engine: AlAdhan integration, timezone-aware calculation methods, fixed/offset Iqamah schedules, Jummah times.
+8.6. Community Engagement: 1-5 star reviews, community Q&A with verified answer badges, content flags.
+8.7. Events & Friday Khutbahs: Mosque calendar, conference announcements, sermon archives with stream URLs.
+8.8. Media Storage Module: Cloudflare R2 / S3 storage with magic-byte validation and traversal prevention.
+8.9. Crowdsourcing Moderation & Gamification: Proposals, field-level diff audits, reviewer audit logs, contributor points, and badges.
+8.10. Notifications & Multi-Device FCM Push: In-app notification center, device token registration, multicast push alerts on Iqamah changes.
+8.11. OSM Ingestion Engine: Overpass API geospatial harvester with 50-meter spatial deduplication.
 
 ================================================================================
-8. COMPREHENSIVE BREAKDOWN OF ALL 10 CORE MODULES
+9. EXHAUSTIVE API REFERENCE CATALOG (ALL 58 REST ENDPOINTS)
 ================================================================================
+--- SYSTEM & OBSERVABILITY ---
+1. GET /v3/api-docs (Public)
+2. GET /swagger-ui.html (Public)
+3. GET /actuator/health (Public)
 
-8.1. User & Identity Module (com.openmosque.modules.user)
-- Handles user onboarding, profile updates, and gamification points tracking.
-- Sync Endpoint: POST /api/v1/users/sync idempotently maps Firebase UID to Postgres entity.
-- Profile Endpoint: GET /api/v1/users/me returns current user stats, assigned badges, and permissions.
-- Bookmarks: Users can favorite mosques for quick offline access and home screen widgets.
+--- TWO-FACTOR AUTHENTICATION (2FA/TOTP) ---
+4. POST /api/v1/auth/2fa/setup (Authenticated) - Initiate 2FA enrollment, returns Base32 secret & otpauth:// URI.
+5. POST /api/v1/auth/2fa/enable (Authenticated) - Confirm 6-digit TOTP code, enables 2FA and returns 8 backup codes.
+6. POST /api/v1/auth/2fa/verify (Authenticated) - Verify TOTP or backup recovery code challenge.
+7. POST /api/v1/auth/2fa/disable (Authenticated) - Step-up authentication to disable 2FA.
+8. GET /api/v1/auth/2fa/status (Authenticated) - Check 2FA status and remaining backup codes count.
+9. POST /api/v1/auth/2fa/backup-codes/regenerate (Authenticated) - Regenerate backup recovery codes with step-up verification.
 
-8.2. Mosque Directory & Facilities Module (com.openmosque.modules.mosque)
-- Central repository of mosques worldwide.
-- Features: Name search, address lookup, city/country filters, and PostGIS ST_DWithin radius discovery.
-- Amenities/Facilities: Standardized flags (WUDU_AREA, WHEELCHAIR_ACCESSIBLE, SEPARATE_WOMENS_PRAYER_HALL, DEDICATED_WOMENS_WUDU, PARKING_LOT, HALAL_FOOD_NEARBY, JANAZAH_FACILITY, ISLAMIC_LIBRARY, FULL_TIME_IMAM, WEEKEND_MADRASSA).
-- Cover photos & multi-photo gallery management.
+--- USER & IDENTITY ---
+10. POST /api/v1/users/sync (Public) - Synchronize / onboard Firebase user to PostgreSQL.
+11. GET /api/v1/users/me (Authenticated) - Current user profile, role, points, and badges.
+12. PUT /api/v1/users/me/location (Authenticated) - Update user preferred GPS coordinates and radius.
+13. GET /api/v1/users/me/favorites (Authenticated) - List favorited / bookmarked mosques.
+14. POST /api/v1/users/me/favorites/{mosqueId} (Authenticated) - Bookmark a mosque.
+15. DELETE /api/v1/users/me/favorites/{mosqueId} (Authenticated) - Remove a bookmark.
+16. GET /api/v1/users/me/badges (Authenticated) - List earned contributor badges.
 
-8.3. Mosque Ownership Claim & Verification Module (com.openmosque.modules.claim)
-- Workflow allowing Imams, Committee Trustees, and Mosque Directors to gain administrative control.
-- Claimant submits official position, phone number, and uploads legal registration/utility bill as proof document.
-- State Machine: PENDING -> APPROVED (User role elevated to MOSQUE_ADMIN) or REJECTED.
-- Reviewed exclusively by SUPER_ADMIN.
+--- NOTIFICATIONS & PUSH DEVICES ---
+17. GET /api/v1/users/me/notifications (Authenticated) - Paginated user notification list.
+18. GET /api/v1/users/me/notifications/unread-count (Authenticated) - Unread notifications count badge.
+19. PATCH /api/v1/users/me/notifications/{id}/read (Authenticated) - Mark notification as read.
+20. PATCH /api/v1/users/me/notifications/read-all (Authenticated) - Mark all notifications as read.
+21. GET /api/v1/users/me/notifications/devices (Authenticated) - List registered FCM device tokens for user.
+22. POST /api/v1/users/me/notifications/devices (Authenticated) - Register device FCM token for push notifications.
+23. DELETE /api/v1/users/me/notifications/devices/{token} (Authenticated) - Unregister device on logout.
 
-8.4. Dynamic Prayer Times & Iqamah Engine (com.openmosque.modules.prayer)
-- Integrates with AlAdhan astronomical calculations based on mosque latitude/longitude.
-- Supports all international calculation methods:
-  - MUSLIM_WORLD_LEAGUE (Europe, Far East)
-  - ISNA (North America)
-  - EGYPTIAN (Africa, Middle East)
-  - UMM_AL_QURA (Saudi Arabia / Arabian Peninsula)
-  - KARACHI (Pakistan, India, Bangladesh)
-  - TEHRAN, GULF, KUWAIT, QATAR, SINGAPORE, TURKEY, FRANCE, RUSSIA
-- Juristic School (Asr calculation):
-  - STANDARD (Shafi'i, Maliki, Hanbali)
-  - HANAFI (Shadow ratio 2:1)
-- Flexible Iqamah Timing Modes:
-  - FIXED_TIME: Iqamah at a static time (e.g., Fajr at 05:30).
-  - OFFSET_AFTER_ADHAN: Dynamic Iqamah (e.g., Maghrib exactly 10 minutes after sunset Adhan).
-- Friday Jumu'ah Management: Supports multiple shifts (Jummah 1, Jummah 2), khutbah languages, and guest Khatib names.
+--- FACILITIES CATALOG ---
+24. GET /api/v1/facilities (Public) - List all available amenity/facility types.
 
-8.5. Community Engagement: Reviews, Ratings, Q&A & Flagging (com.openmosque.modules.community)
-- 5-Star Reviews: Verified worshippers can rate facilities, cleanliness, parking, and women's accommodations.
-- Community Q&A: Public thread for questions like "Is parking free on Fridays?" or "Are sisters allowed in Taraweeh?".
-- Answers can be submitted by community members and officially verified by Mosque Admins.
-- Content Moderation: Users can flag abusive or inaccurate content (SPAM, OFFENSIVE, INACCURATE) for moderator review.
+--- MOSQUE DIRECTORY & SPATIAL SEARCH ---
+25. GET /api/v1/mosques/nearby (Public) - Geospatial proximity search via PostGIS.
+26. GET /api/v1/mosques/search (Public) - Text and keyword search.
+27. GET /api/v1/mosques/{id} (Public) - Get full mosque profile details by UUID.
+28. GET /api/v1/mosques/slug/{slug} (Public) - Get mosque details by URL-friendly slug.
+29. POST /api/v1/mosques (Role: SUPER_ADMIN) - Create a verified mosque directly.
+30. PUT /api/v1/mosques/{id} (Role: MOSQUE_ADMIN or SUPER_ADMIN) - Update mosque profile.
+31. DELETE /api/v1/mosques/{id} (Role: SUPER_ADMIN) - Soft or hard delete a mosque.
 
-8.6. Events & Friday Khutbahs Module (com.openmosque.modules.event)
-- Events: Mosque conferences, Ramadan Iftar schedules, Quran competitions, Eid prayers.
-- Friday Khutbah Archives: Historical repository of sermons with audio/video stream links (YouTube, Facebook Live, SoundCloud), khutbah summaries, and multi-lingual tags.
+--- PRAYER TIMES & IQAMAH SCHEDULE ---
+32. GET /api/v1/prayer-times/mosque/{mosqueId} (Public) - Calculated prayer & Iqamah timings for date.
+33. GET /api/v1/prayer-times/mosque/{mosqueId}/config (Public) - Mosque calculation method & juristic settings.
+34. PUT /api/v1/prayer-times/mosque/{mosqueId}/config (Role: MOSQUE_ADMIN or SUPER_ADMIN) - Update calculation config.
+35. GET /api/v1/prayer-times/mosque/{mosqueId}/iqamah (Public) - Current Iqamah schedule and Friday Jumu'ah times.
+36. PUT /api/v1/prayer-times/mosque/{mosqueId}/iqamah (Role: MOSQUE_ADMIN or SUPER_ADMIN) - Update Iqamah offsets and fixed times.
+37. GET /api/v1/calculation-methods (Public) - List supported global prayer calculation authorities.
 
-8.7. Media Upload & Multi-part Storage Module (com.openmosque.modules.media)
-- Handles secure file uploads for mosque photos, cover pictures, and trustee verification documents.
-- Validates MIME types (JPEG, PNG, WEBP, PDF) and enforces size limits.
-- Supports both local static directory uploads and cloud storage configurations.
+--- MOSQUE OWNERSHIP CLAIMS ---
+38. POST /api/v1/claims (Authenticated) - Submit claim for mosque administration.
+39. GET /api/v1/claims/my (Authenticated) - View user's submitted claim statuses.
+40. GET /api/v1/claims/pending (Role: SUPER_ADMIN) - List all pending claims awaiting verification.
+41. PUT /api/v1/claims/{id}/review (Role: SUPER_ADMIN) - Approve/reject claim (Anti-Self Approval enforced).
 
-8.8. Crowdsourcing Moderation & Contributor Gamification Module (com.openmosque.modules.moderation)
-- Community users propose unlisted mosques or submit correction diffs.
-- Changes enter a PENDING moderation queue.
-- Moderators inspect submissions with side-by-side field diffs before approving.
-- On approval, the proposing contributor is automatically awarded reward points (e.g., 50 points for a new mosque, 15 points for an edit).
-- Tier Badges: Users level up across Contributor Badges (NOVICE -> BRONZE -> SILVER -> GOLD -> LEGEND).
+--- CROWDSOURCING & MODERATION ---
+42. POST /api/v1/submissions (Authenticated) - Propose new mosque or suggest edits.
+43. GET /api/v1/submissions/my (Authenticated) - View user's submission history and awarded points.
+44. GET /api/v1/submissions/pending (Role: MODERATOR or SUPER_ADMIN) - List pending moderation queue.
+45. PUT /api/v1/submissions/{id}/review (Role: MODERATOR or SUPER_ADMIN) - Approve/reject submission (Anti-Self Approval enforced).
+46. GET /api/v1/moderation/audit-logs (Role: SUPER_ADMIN) - View full moderation audit trail.
 
-8.9. User Notifications & Bookmarks/Favorites Module (com.openmosque.modules.notification)
-- Dispatches in-app notifications when:
-  - A user's mosque submission is approved or rejected.
-  - A mosque ownership claim is decided.
-  - A favorited mosque posts a new announcement or prayer schedule change.
+--- COMMUNITY REVIEWS & Q&A ---
+47. GET /api/v1/reviews/mosque/{mosqueId} (Public) - List paginated reviews and average rating.
+48. POST /api/v1/reviews/mosque/{mosqueId} (Authenticated) - Submit 1-5 star review.
+49. DELETE /api/v1/reviews/{reviewId} (Role: AUTHOR or MODERATOR) - Delete review.
+50. GET /api/v1/questions/mosque/{mosqueId} (Public) - List Q&A threads for a mosque.
+51. POST /api/v1/questions/mosque/{mosqueId} (Authenticated) - Ask a community question.
+52. POST /api/v1/answers/question/{questionId} (Authenticated) - Post an answer.
+53. PUT /api/v1/answers/{answerId}/accept (Role: MOSQUE_ADMIN) - Mark answer as officially verified.
+54. POST /api/v1/community/flags (Authenticated) - Report spam or inappropriate content.
+55. GET /api/v1/community/flags/pending (Role: MODERATOR) - List reported content queue.
+56. PUT /api/v1/community/flags/{id}/resolve (Role: MODERATOR) - Resolve content flag.
 
-8.10. OpenStreetMap (OSM) Automated Ingestion & Deduplication Engine (com.openmosque.modules.ingestion)
-- Background ingestion service connecting to the Overpass API:
-  Querying amenity=place_of_worship and religion=muslim.
-- Spatial Deduplication: Calculates distance to existing mosques. If another mosque exists within 50 meters, the record is skipped or updated to prevent duplicates.
-- Automates global directory bootstrapping across entire cities or countries.
-
-================================================================================
-9. EXHAUSTIVE API REFERENCE CATALOG (ALL 48 REST ENDPOINTS)
-================================================================================
-
---- MODULE 1: SYSTEM & OPENAPI DOCUMENTATION ---
-1. GET /v3/api-docs (Public) - Raw OpenAPI 3.0 JSON specification.
-2. GET /swagger-ui.html (Public) - Interactive Swagger UI documentation.
-
---- MODULE 2: USER & IDENTITY ---
-3. POST /api/v1/users/sync (Public) - Synchronize / onboard Firebase user to PostgreSQL.
-4. GET /api/v1/users/me (Authenticated) - Get current user profile, role, points, and badges.
-5. PUT /api/v1/users/me/location (Authenticated) - Update user preferred GPS coordinates and radius.
-6. GET /api/v1/users/me/favorites (Authenticated) - List favorited / bookmarked mosques.
-7. POST /api/v1/users/me/favorites/{mosqueId} (Authenticated) - Bookmark a mosque.
-8. DELETE /api/v1/users/me/favorites/{mosqueId} (Authenticated) - Remove a bookmark.
-9. GET /api/v1/users/me/badges (Authenticated) - List earned contributor badges.
-
---- MODULE 3: FACILITIES CATALOG ---
-10. GET /api/v1/facilities (Public) - List all available amenity/facility types.
-
---- MODULE 4: MOSQUE DIRECTORY & SPATIAL SEARCH ---
-11. GET /api/v1/mosques/nearby (Public) - Geospatial proximity search via PostGIS (latitude, longitude, radiusKm, facilities).
-12. GET /api/v1/mosques/search (Public) - Text and keyword search (name, city, country, page, size).
-13. GET /api/v1/mosques/{id} (Public) - Get full mosque profile details by UUID.
-14. GET /api/v1/mosques/slug/{slug} (Public) - Get mosque details by URL-friendly slug.
-15. POST /api/v1/mosques (Role: SUPER_ADMIN) - Create a verified mosque directly.
-16. PUT /api/v1/mosques/{id} (Role: MOSQUE_ADMIN or SUPER_ADMIN) - Update mosque profile.
-17. DELETE /api/v1/mosques/{id} (Role: SUPER_ADMIN) - Soft or hard delete a mosque.
-
---- MODULE 5: PRAYER TIMES & IQAMAH SCHEDULE ---
-18. GET /api/v1/prayer-times/mosque/{mosqueId} (Public) - Get calculated prayer & Iqamah timings for date.
-19. GET /api/v1/prayer-times/mosque/{mosqueId}/config (Public) - Get mosque calculation method & juristic settings.
-20. PUT /api/v1/prayer-times/mosque/{mosqueId}/config (Role: MOSQUE_ADMIN or SUPER_ADMIN) - Update calculation config.
-21. GET /api/v1/prayer-times/mosque/{mosqueId}/iqamah (Public) - Get current Iqamah schedule and Friday Jumu'ah times.
-22. PUT /api/v1/prayer-times/mosque/{mosqueId}/iqamah (Role: MOSQUE_ADMIN or SUPER_ADMIN) - Update Iqamah offsets and fixed times.
-23. GET /api/v1/calculation-methods (Public) - List supported global prayer calculation authorities.
-
---- MODULE 6: MOSQUE OWNERSHIP CLAIMS ---
-24. POST /api/v1/claims (Authenticated) - Submit claim for mosque administration with proof documents.
-25. GET /api/v1/claims/my (Authenticated) - View user's submitted claim statuses.
-26. GET /api/v1/claims/pending (Role: SUPER_ADMIN) - List all pending claims awaiting verification.
-27. PUT /api/v1/claims/{id}/review (Role: SUPER_ADMIN) - Approve or reject claim (elevates user to MOSQUE_ADMIN).
-
---- MODULE 7: CROWDSOURCING & MODERATION ---
-28. POST /api/v1/submissions (Authenticated) - Propose new mosque or suggest edits to existing mosque.
-29. GET /api/v1/submissions/my (Authenticated) - View user's submission history and awarded points.
-30. GET /api/v1/submissions/pending (Role: MODERATOR or SUPER_ADMIN) - List pending moderation queue.
-31. PUT /api/v1/submissions/{id}/review (Role: MODERATOR or SUPER_ADMIN) - Approve/reject submission with audit notes.
-32. GET /api/v1/moderation/audit-logs (Role: SUPER_ADMIN) - View full moderation audit trail.
-
---- MODULE 8: COMMUNITY REVIEWS & Q&A ---
-33. GET /api/v1/reviews/mosque/{mosqueId} (Public) - List paginated reviews and average rating.
-34. POST /api/v1/reviews/mosque/{mosqueId} (Authenticated) - Submit 1-5 star review.
-35. DELETE /api/v1/reviews/{reviewId} (Role: AUTHOR or MODERATOR) - Delete review.
-36. GET /api/v1/questions/mosque/{mosqueId} (Public) - List Q&A threads for a mosque.
-37. POST /api/v1/questions/mosque/{mosqueId} (Authenticated) - Ask a community question.
-38. POST /api/v1/answers/question/{questionId} (Authenticated) - Post an answer.
-39. PUT /api/v1/answers/{answerId}/accept (Role: MOSQUE_ADMIN) - Mark answer as officially verified.
-40. POST /api/v1/community/flags (Authenticated) - Report spam or inappropriate content.
-41. GET /api/v1/community/flags/pending (Role: MODERATOR) - List reported content queue.
-42. PUT /api/v1/community/flags/{id}/resolve (Role: MODERATOR) - Resolve content flag.
-
---- MODULE 9: EVENTS & FRIDAY KHUTBAHS ---
-43. GET /api/v1/events/mosque/{mosqueId} (Public) - List upcoming mosque events and announcements.
-44. POST /api/v1/events/mosque/{mosqueId} (Role: MOSQUE_ADMIN) - Create a new event.
-45. DELETE /api/v1/events/{eventId} (Role: MOSQUE_ADMIN) - Cancel / delete an event.
-46. GET /api/v1/khutbahs/mosque/{mosqueId} (Public) - List Friday Khutbah recordings and live streams.
-47. POST /api/v1/khutbahs/mosque/{mosqueId} (Role: MOSQUE_ADMIN) - Publish Friday sermon recording.
-
---- MODULE 10: MEDIA & INGESTION ---
-48. POST /api/v1/media/upload (Authenticated) - Upload image or verification PDF file.
-49. POST /api/v1/ingestion/osm (Role: SUPER_ADMIN) - Trigger automated Overpass OpenStreetMap sync for a bounding box.
+--- EVENTS & MEDIA ---
+57. GET /api/v1/events/mosque/{mosqueId} (Public) - List upcoming mosque events and announcements.
+58. POST /api/v1/events/mosque/{mosqueId} (Role: MOSQUE_ADMIN) - Create a new event.
+59. DELETE /api/v1/events/{eventId} (Role: MOSQUE_ADMIN) - Cancel / delete an event.
+60. GET /api/v1/khutbahs/mosque/{mosqueId} (Public) - List Friday Khutbah recordings and live streams.
+61. POST /api/v1/khutbahs/mosque/{mosqueId} (Role: MOSQUE_ADMIN) - Publish Friday sermon recording.
+62. POST /api/v1/media/upload (Authenticated) - Upload image/PDF with magic-byte validation.
+63. POST /api/v1/ingestion/osm (Role: SUPER_ADMIN) - Trigger automated Overpass OpenStreetMap sync.
 
 ================================================================================
-10. DEVOPS, CLOUD DEPLOYMENT & DATABASE INFRASTRUCTURE (NEON + RENDER)
+10. DEVOPS, CLOUD DEPLOYMENT & DATABASE INFRASTRUCTURE
 ================================================================================
-10.1. Neon Serverless PostgreSQL Configuration:
-- Connection Mode: PostgreSQL 16 with pooling (sslmode=require).
-- Geographic Region: AWS ap-southeast-1 (Singapore) for low latency.
-- Hibernate Dialect: org.hibernate.dialect.PostgreSQLDialect with spatial mapping.
-- Auto-DDL Disabled: Flyway handles all production migrations (ddl-auto: validate).
+10.1. Neon Serverless PostgreSQL:
+- Host: Neon Serverless AWS (Pooled connection, sslmode=require).
+- Native PostGIS: Extensions CREATE EXTENSION IF NOT EXISTS postgis;
+- Validation Mode: spring.jpa.hibernate.ddl-auto=validate (Flyway manages all DDL).
 
-10.2. Production Multi-Stage Dockerfile:
-- Stage 1 (Builder): maven:3.9.6-eclipse-temurin-17-alpine compiles and packages fat JAR with dependency caching.
-- Stage 2 (Runner): eclipse-temurin:17-jre-alpine runs the optimized fat JAR under a non-root security context.
+10.2. Cloudflare R2 Media Storage:
+- S3-compatible, zero-egress cost object storage.
+- Environment variables: CLOUDFLARE_R2_ACCESS_KEY, CLOUDFLARE_R2_SECRET_KEY, CLOUDFLARE_R2_ENDPOINT, CLOUDFLARE_R2_BUCKET, CLOUDFLARE_R2_PUBLIC_URL.
 
-10.3. Render Blueprint (render.yaml):
-- Service Type: Docker Web Service.
-- Plan: Free / Starter.
-- Port: 8080.
-- Automatic environment variable bindings for SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME, and SPRING_DATASOURCE_PASSWORD.
+10.3. Render Deployment:
+- Docker web service with Spring Boot multi-stage build.
+- Health Check: /actuator/health returns 200 UP.
 
 ================================================================================
-11. TEST COVERAGE & QUALITY ASSURANCE
+11. TEST COVERAGE & QUALITY ASSURANCE (12 TEST SUITES, 45 TESTS)
 ================================================================================
-The backend contains 9 comprehensive automated test suites in src/test/java/com/openmosque:
-
-1. OpenMosqueApplicationTests.java: Context loading & Spring bean initialization sanity.
-2. MosqueServiceTests.java: PostGIS spatial calculations, distance assertions, and facility filtering.
-3. PrayerTimesServiceTests.java: Calculation methods, Hanafi vs Standard Asr, fixed vs offset Iqamah schedules.
-4. CommunityReviewAndQAServiceTests.java: Review ratings, moderation flags, Q&A threads, and accepted answer lifecycle.
-5. OsmIngestionServiceTests.java: Overpass API mock responses, bounding box parsing, and 50m spatial deduplication.
-6. MediaUploadServiceTests.java: MIME type whitelist enforcement, file size boundaries, and storage safety.
-7. MosqueEventServiceTests.java: Event scheduling, chronological sorting, and Khutbah media links.
-8. FavoritesAndBadgesTests.java: User bookmarking, contributor point accumulation, and badge tier promotions.
-9. NotificationAndMediaTests.java: In-app notification delivery and read status updates.
-
-Test Profile Strategy:
-- application-test.yml runs an in-memory H2 database in PostgreSQL mode (MODE=PostgreSQL) with dev-mock-auth: true to enable deterministic, lightning-fast test execution without internet connectivity or external DB dependencies.
+All 12 test suites execute with 100% pass rate in Maven (mvn test):
+1. OpenMosqueApplicationTests.java - Context loading, ApiResponse envelope validation.
+2. MosqueServiceTests.java - PostGIS ST_DWithin spatial queries and facility filters.
+3. PrayerTimesServiceTests.java - Prayer calculation algorithms, Asr juristic school, Iqamah schedules.
+4. CommunityReviewAndQAServiceTests.java - 5-star rating aggregations, profanity filtering, Q&A threads.
+5. OsmIngestionServiceTests.java - Overpass API mock parsing, 50-meter deduplication.
+6. MediaUploadServiceTests.java - Local and cloud media storage.
+7. MosqueEventServiceTests.java - Event scheduling, Friday Khutbah archives, role authorization.
+8. FavoritesAndBadgesTests.java - User bookmarks, contributor points, badge tier progression.
+9. NotificationAndMediaTests.java - In-app notification delivery, read tracking, local storage.
+10. TotpAndTwoFactorSecurityTests.java - RFC 6238 TOTP engine, QR code uri, step-up verification, hashed backup codes.
+11. FileSecurityAndUploadTests.java - Real binary magic bytes validation, executable header blocking, path traversal sanitization.
+12. SecurityHardeningTests.java - Self-approval blocking for moderation and mosque claims.
 
 ================================================================================
 12. AI REVIEWER CHECKLIST & CODE AUDIT PROMPTS
 ================================================================================
-When reviewing this backend as an AI agent, please focus your audit on the following critical dimensions:
-
-1. Spatial Index Utilization:
-   - Verify that all spatial queries on mosques.location leverage the GIST index and use ST_DWithin on geography rather than non-indexed Euclidean calculations.
-2. Security & RBAC Enforcement:
-   - Check that @PreAuthorize or manual role checks strictly verify user permissions before executing administrative operations (especially Iqamah updates, claim approvals, and moderation decisions).
-3. Concurrency & Optimistic Locking:
-   - Inspect update operations on mosque_iqamah_schedules and mosque_submissions to guarantee thread-safe state transitions.
-4. Idempotency of User Sync:
-   - Ensure POST /api/v1/users/sync safely handles duplicate concurrent calls without causing unique constraint violations on firebase_uid or email.
-5. Error Handling & Payload Contracts:
-   - Verify all exceptions are intercepted by GlobalExceptionHandler and return standardized ApiResponse<T> envelopes with appropriate HTTP status codes (400, 401, 403, 404, 500).
+When reviewing this backend as an AI agent, focus on:
+1. Spatial Index Utilization: Ensure ST_DWithin uses geography casting on mosques.location with GIST indexing.
+2. RBAC & IDOR Protections: Verify claimRequestRepository.findByMosqueIdAndClaimantIdAndStatus ensures Mosque Admins cannot modify mosques they do not own.
+3. Anti-Self Approval: Verify moderators and claimants cannot approve their own submissions.
+4. Upload Safety: Verify FileSecurityValidator is called before any binary byte write to disk or cloud storage.
+5. Push Multicast & Cleanup: Verify NotificationService prunes invalid/unregistered device tokens when FCM returns UNREGISTERED.
 
 --- END OF SPECIFICATION ---
