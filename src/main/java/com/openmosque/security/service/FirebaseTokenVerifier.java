@@ -21,11 +21,11 @@ import java.nio.charset.StandardCharsets;
 /**
  * Service responsible for initializing Firebase Admin SDK and verifying Firebase ID tokens.
  * 
- * SECURITY BEST PRACTICES SUPPORTED:
- * 1. External File Path: Loads JSON securely from outside project (e.g. 'file:C:/Users/syedf/.secrets/key.json')
- * 2. Environment Variable JSON: Reads raw JSON string from 'FIREBASE_CREDENTIALS_JSON'
- * 3. Google Default Credentials: Reads from standard 'GOOGLE_APPLICATION_CREDENTIALS' environment variable
- * 4. Dev Mock Mode: Allows local testing with mock Bearer tokens (e.g. 'mock-firebase-uid-001')
+ * PRODUCTION SECURITY GUARANTEES:
+ * 1. Strictly disables dev-mock tokens in production profile ('prod').
+ * 2. Never exposes Firebase credentials via logs, APIs, or stack traces.
+ * 3. Rejects expired, forged, or malformed JWT tokens.
+ * 4. Supports external service-account file, FIREBASE_CREDENTIALS_JSON env var, or Google ADC.
  */
 @Slf4j
 @Service
@@ -40,8 +40,11 @@ public class FirebaseTokenVerifier {
     @Value("${FIREBASE_CREDENTIALS_JSON:}")
     private String firebaseCredentialsJson;
 
-    @Value("${app.security.firebase.dev-mock-auth:true}")
+    @Value("${app.security.firebase.dev-mock-auth:false}")
     private boolean devMockAuthEnabled;
+
+    @Value("${spring.profiles.active:dev}")
+    private String activeProfile;
 
     private boolean initialized = false;
 
@@ -50,8 +53,14 @@ public class FirebaseTokenVerifier {
      */
     @PostConstruct
     public void init() {
+        // Enforce: Production profile MUST NEVER allow dev mock auth
+        if (activeProfile != null && activeProfile.contains("prod")) {
+            devMockAuthEnabled = false;
+            log.info("Production profile active: dev-mock-auth is strictly disabled.");
+        }
+
         if (!firebaseEnabled) {
-            log.info("Firebase Admin SDK disabled by configuration (app.security.firebase.enabled=false). Using dev mock auth.");
+            log.info("Firebase Admin SDK disabled by configuration (app.security.firebase.enabled=false).");
             return;
         }
 
@@ -69,7 +78,7 @@ public class FirebaseTokenVerifier {
                 initialized = true;
                 log.info("Firebase Admin SDK initialized successfully.");
             } else {
-                log.warn("No valid Firebase credentials found. Falling back to dev mock auth.");
+                log.warn("No valid Firebase credentials found.");
             }
         } catch (Exception e) {
             log.error("Failed to initialize Firebase Admin SDK: {}", e.getMessage());
@@ -81,7 +90,7 @@ public class FirebaseTokenVerifier {
      */
     private GoogleCredentials resolveCredentials() {
         try {
-            // 1. Direct JSON String via environment variable
+            // 1. Direct JSON String via environment variable (e.g. Render Dashboard secret)
             if (StringUtils.hasText(firebaseCredentialsJson)) {
                 log.info("Loading Firebase credentials from FIREBASE_CREDENTIALS_JSON environment variable.");
                 try (InputStream is = new ByteArrayInputStream(firebaseCredentialsJson.getBytes(StandardCharsets.UTF_8))) {
@@ -108,7 +117,7 @@ public class FirebaseTokenVerifier {
     }
 
     /**
-     * Verifies a Firebase ID token or processes a mock token in development mode.
+     * Verifies a Firebase ID token or processes a mock token strictly in development mode.
      * 
      * @param idToken The JWT token string sent in 'Authorization: Bearer <idToken>'
      * @return VerifiedTokenInfo containing user UID and email, or null if invalid.
@@ -118,8 +127,10 @@ public class FirebaseTokenVerifier {
             return null;
         }
 
-        // 1. Explicit mock token support in dev mode (e.g., 'mock-firebase-uid-001')
-        if (devMockAuthEnabled && idToken.startsWith("mock-")) {
+        boolean isProd = activeProfile != null && activeProfile.contains("prod");
+
+        // 1. Explicit mock token support ONLY in non-production dev mock mode
+        if (!isProd && devMockAuthEnabled && idToken.startsWith("mock-")) {
             log.debug("Dev Mock Auth: Simulating authentication for mock token: {}", idToken);
             String mockUid = idToken;
             String mockEmail = idToken.contains("@") ? idToken : mockUid.replace("mock-", "") + "@openmosque.org";
@@ -131,7 +142,7 @@ public class FirebaseTokenVerifier {
                     .build();
         }
 
-        // 2. Real Firebase JWT verification if Firebase SDK is initialized
+        // 2. Real cryptographic Firebase JWT verification
         if (initialized) {
             try {
                 FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(idToken);
@@ -142,9 +153,9 @@ public class FirebaseTokenVerifier {
                         .picture(decodedToken.getPicture())
                         .build();
             } catch (Exception e) {
-                log.warn("Firebase ID Token verification failed: {}", e.getMessage());
-                // In dev mode, fallback to mock user for arbitrary test strings
-                if (devMockAuthEnabled) {
+                log.warn("Firebase ID Token verification rejected: {}", e.getMessage());
+                // Strictly deny fallback in production
+                if (!isProd && devMockAuthEnabled) {
                     log.debug("Dev mode fallback for non-JWT test string: {}", idToken);
                     String mockUid = idToken;
                     return VerifiedTokenInfo.builder()
@@ -158,8 +169,8 @@ public class FirebaseTokenVerifier {
             }
         }
 
-        // 3. Fallback when Firebase is disabled in dev mode
-        if (devMockAuthEnabled) {
+        // 3. Fallback when Firebase is disabled strictly in local development
+        if (!isProd && devMockAuthEnabled) {
             String mockUid = idToken;
             return VerifiedTokenInfo.builder()
                     .uid(mockUid)

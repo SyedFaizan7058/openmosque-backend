@@ -28,12 +28,13 @@ import java.util.UUID;
 public class DevLocalStorageService implements StorageService {
 
     private final LocalStorageProperties properties;
+    private final FileSecurityValidator fileSecurityValidator;
 
     @Override
     public UploadUrlResponseDto generatePreSignedUploadUrl(UploadUrlRequestDto request, User user) {
         validateContentType(request.getContentType());
 
-        String cleanFileName = request.getFileName().replaceAll("[^a-zA-Z0-9._-]", "_");
+        String cleanFileName = fileSecurityValidator.sanitizeFilename(request.getFileName());
         String objectKey = String.format("%s/%s_%s",
                 request.getFolderCategory().toLowerCase(),
                 UUID.randomUUID().toString().substring(0, 8),
@@ -58,6 +59,7 @@ public class DevLocalStorageService implements StorageService {
     public String storeBinary(String objectKey, byte[] data, String contentType) {
         validateContentType(contentType);
         validateFileSize(data.length);
+        fileSecurityValidator.validateFile(objectKey, data, contentType);
 
         Path basePath = Paths.get(properties.getUploadDir()).toAbsolutePath().normalize();
         Path targetPath = basePath.resolve(objectKey).normalize();
@@ -81,7 +83,7 @@ public class DevLocalStorageService implements StorageService {
 
     @Override
     public String storeFile(String folderCategory, String originalFileName, byte[] data, String contentType) {
-        String cleanFileName = originalFileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+        String cleanFileName = fileSecurityValidator.sanitizeFilename(originalFileName);
         String objectKey = String.format("%s/%s_%s",
                 folderCategory.toLowerCase(),
                 UUID.randomUUID().toString().substring(0, 8),

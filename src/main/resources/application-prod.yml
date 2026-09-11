@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # OpenMosque Backend - Production Cloud Profile (application-prod.yml)
 # Supports Neon.tech / Render / AWS / GCP PostgreSQL
 # ==============================================================================
@@ -18,7 +18,7 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
@@ -39,6 +39,17 @@ app:
   rate-limit:
     enabled: true
     backend: ${RATE_LIMIT_BACKEND:local}
+  security:
+    firebase:
+      enabled: true
+      dev-mock-auth: false
+  cors:
+    allowed-origins: "${APP_CORS_ALLOWED_ORIGINS:https://openmosque.org,https://openmosque.vercel.app}"
+
+management:
+  health:
+    redis:
+      enabled: false
 
 logging:
   level:

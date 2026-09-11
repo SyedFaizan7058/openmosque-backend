@@ -173,7 +173,8 @@ public class NotificationAndMediaTests {
 
     @Test
     void testMediaLocalStorageSaveAndServe() {
-        byte[] testData = "Fake PNG binary image data for testing".getBytes();
+        // Real PNG 8-byte magic header followed by dummy data
+        byte[] testData = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D};
         String publicUrl = storageService.storeFile("test-mosque", "sample.png", testData, "image/png");
 
         assertNotNull(publicUrl);

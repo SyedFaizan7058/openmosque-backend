@@ -139,6 +139,15 @@ class PrayerTimesServiceTests {
                 .verified(true)
                 .build();
         testMosque = mosqueRepository.save(testMosque);
+
+        claimRepository.save(com.openmosque.modules.claim.entity.MosqueClaimRequest.builder()
+                .mosque(testMosque)
+                .claimant(mosqueAdmin)
+                .fullName("Head Imam")
+                .phoneNumber("+44123456780")
+                .positionInMosque("Imam")
+                .status(com.openmosque.modules.claim.entity.ClaimStatus.APPROVED)
+                .build());
     }
 
     @Test
@@ -213,7 +222,7 @@ class PrayerTimesServiceTests {
 
         assertThatThrownBy(() -> prayerTimesService.updatePrayerConfig(testMosque.getId(), updateDto, regularUser))
                 .isInstanceOf(ForbiddenException.class)
-                .hasMessageContaining("MOSQUE_ADMIN or SUPER_ADMIN");
+                .hasMessageContaining("You do not have permission to manage prayer timings for this mosque");
     }
 
     @Test

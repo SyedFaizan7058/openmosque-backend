@@ -10,15 +10,18 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.AuthenticationEntryPoint;
-import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -29,12 +32,11 @@ import java.util.List;
 /**
  * Spring Security 6 Configuration for OpenMosque Backend.
  * 
- * WHY THIS IS PRESENT:
- * 1. Stateless Architecture: Disables sessions (SessionCreationPolicy.STATELESS) in favor of JWT Bearer tokens.
- * 2. Public vs Protected Routes: Exposes public mosque search/viewing and onboarding sync endpoints.
- * 3. Custom 401 Unauthorized Entry Point & 403 Forbidden Handler: Returns clean JSON ApiResponse when unauthenticated or forbidden.
- * 4. CORS Configuration: Allows React web & React Native mobile clients to communicate without browser CORS blocking.
- * 5. Token Validation: Chains 'FirebaseAuthFilter' before standard authentication filters.
+ * SECURITY HARDENING:
+ * 1. Comprehensive HTTP Security Headers (HSTS, CSP, X-Content-Type-Options, X-Frame-Options, Referrer, Permissions).
+ * 2. Strict CORS policy with credentials control.
+ * 3. Stateless JWT Bearer session management.
+ * 4. Defense-in-depth role authorization across public, user, moderator, mosque-admin, and super-admin routes.
  */
 @Configuration
 @EnableWebSecurity
@@ -46,22 +48,27 @@ public class SecurityConfig {
     private final com.openmosque.security.ratelimit.RateLimitingFilter rateLimitingFilter;
     private final ObjectMapper objectMapper;
 
-    @Value("${app.cors.allowed-origins:*}")
+    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173}")
     private String allowedOrigins;
 
     @Value("${app.cors.allowed-methods:GET,POST,PUT,PATCH,DELETE,OPTIONS}")
     private String allowedMethods;
 
-    /**
-     * Configures the HTTP security filter chain, route protections, and stateless session policy.
-     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // Disable CSRF since REST APIs use stateless JWT authentication
+                // Disable CSRF since REST APIs use stateless JWT tokens and HttpOnly cookies with SameSite
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(headers -> headers
+                        .contentTypeOptions(Customizer.withDefaults()) // X-Content-Type-Options: nosniff
+                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny) // X-Frame-Options: DENY
+                        .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000)) // HSTS 1 year
+                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"))
+                        .referrerPolicy(referrer -> referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                        .permissionsPolicy(permissions -> permissions.policy("geolocation=(self), camera=(), microphone=()"))
+                )
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(customAuthenticationEntryPoint())
                         .accessDeniedHandler(customAccessDeniedHandler())
@@ -72,11 +79,12 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
-                                "/actuator/health"
+                                "/actuator/health",
+                                "/actuator/info"
                         ).permitAll()
 
                         // 2. Explicitly Protected User & Favorites Routes
-                        .requestMatchers("/api/v1/users/me/favorites/**", "/api/v1/users/me/badges").authenticated()
+                        .requestMatchers("/api/v1/users/me/favorites/**", "/api/v1/users/me/badges", "/api/v1/users/me/notifications/**").authenticated()
                         .requestMatchers("/api/v1/mosques/*/favorite", "/api/v1/mosques/*/is-favorite").authenticated()
 
                         // 3. Public Mosque Discovery, Badges Catalog, Media Files & Prayer APIs (Public)
@@ -84,10 +92,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/mosques/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/prayer-times/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/facilities/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/calculation-methods/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/media/files/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/v1/media/upload", "/api/v1/media/mock-upload").permitAll()
 
-                        // 4. User Authentication & Initial Registration Sync (Public)
+                        // 4. User Authentication, Session, 2FA & Initial Registration Sync (Public)
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/users/sync").permitAll()
 
@@ -119,9 +128,6 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /**
-     * Custom EntryPoint returning standardized JSON error response when an unauthenticated request hits a protected route.
-     */
     @Bean
     public AuthenticationEntryPoint customAuthenticationEntryPoint() {
         return (request, response, authException) -> {
@@ -132,9 +138,6 @@ public class SecurityConfig {
         };
     }
 
-    /**
-     * Custom AccessDeniedHandler returning standardized JSON 403 error response when an authenticated user lacks required privileges.
-     */
     @Bean
     public AccessDeniedHandler customAccessDeniedHandler() {
         return (request, response, accessDeniedException) -> {
@@ -145,21 +148,26 @@ public class SecurityConfig {
         };
     }
 
-    /**
-     * Configures CORS (Cross-Origin Resource Sharing) permissions for web and mobile clients.
-     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        List<String> origins = Arrays.asList(allowedOrigins.split(","));
-        if (origins.contains("*")) {
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+
+        boolean hasWildcard = origins.contains("*");
+        if (hasWildcard) {
             configuration.addAllowedOriginPattern("*");
+            configuration.setAllowCredentials(false);
         } else {
             configuration.setAllowedOrigins(origins);
+            configuration.setAllowCredentials(true);
         }
+
         configuration.setAllowedMethods(Arrays.asList(allowedMethods.split(",")));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true);
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin", "X-Device-Token"));
+        configuration.setExposedHeaders(List.of("X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After", "Set-Cookie"));
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

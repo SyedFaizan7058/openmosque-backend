@@ -1,9 +1,11 @@
 package com.openmosque.modules.moderation.service;
 
 import com.openmosque.common.exception.BadRequestException;
+import com.openmosque.common.exception.ForbiddenException;
 import com.openmosque.common.exception.ResourceNotFoundException;
 import com.openmosque.common.model.PageResponse;
 import com.openmosque.common.util.GeoUtils;
+import com.openmosque.modules.user.entity.UserRole;
 import com.openmosque.modules.moderation.dto.MosqueSubmissionRequestDto;
 import com.openmosque.modules.moderation.dto.MosqueSubmissionResponseDto;
 import com.openmosque.modules.moderation.dto.SubmissionDecisionDto;
@@ -99,6 +101,12 @@ public class ModerationService {
 
         if (submission.getStatus() != SubmissionStatus.PENDING) {
             throw new BadRequestException("Submission has already been reviewed with status: " + submission.getStatus());
+        }
+
+        // Conflict of interest check: Moderators cannot review their own submissions
+        if (submission.getSubmitter() != null && submission.getSubmitter().getId().equals(moderator.getId())
+                && moderator.getRole() != UserRole.SUPER_ADMIN) {
+            throw new ForbiddenException("Conflict of interest: Moderators cannot review or approve their own submissions.");
         }
 
         submission.setStatus(decision.getStatus());

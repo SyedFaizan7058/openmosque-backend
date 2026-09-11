@@ -107,13 +107,18 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             return false;
         }
 
-        return pathMatcher.match("/api/v1/mosques/submissions", path)
+        return pathMatcher.match("/api/v1/auth/2fa/**", path)
+                || pathMatcher.match("/api/v1/auth/session", path)
+                || pathMatcher.match("/api/v1/users/sync", path)
+                || pathMatcher.match("/api/v1/media/**", path)
+                || pathMatcher.match("/api/v1/mosques/submissions", path)
                 || pathMatcher.match("/api/v1/mosques/*/suggest-edit", path)
                 || pathMatcher.match("/api/v1/mosques/*/reviews", path)
                 || pathMatcher.match("/api/v1/mosques/*/claim", path)
                 || pathMatcher.match("/api/v1/community/flag", path)
                 || pathMatcher.match("/api/v1/mosques/*/questions", path)
-                || pathMatcher.match("/api/v1/community/questions/*/answers", path);
+                || pathMatcher.match("/api/v1/community/questions/*/answers", path)
+                || pathMatcher.match("/api/v1/users/me/notifications/devices", path);
     }
 
     private UUID resolveAuthenticatedUserId() {

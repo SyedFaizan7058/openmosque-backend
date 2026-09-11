@@ -2,6 +2,7 @@ package com.openmosque.modules.claim.service;
 
 import com.openmosque.common.exception.BadRequestException;
 import com.openmosque.common.exception.ConflictException;
+import com.openmosque.common.exception.ForbiddenException;
 import com.openmosque.common.exception.ResourceNotFoundException;
 import com.openmosque.common.model.PageResponse;
 import com.openmosque.modules.claim.dto.MosqueClaimDecisionDto;
@@ -89,6 +90,11 @@ public class MosqueClaimService {
 
         if (claim.getStatus() != ClaimStatus.PENDING) {
             throw new BadRequestException("Claim request has already been reviewed with status: " + claim.getStatus());
+        }
+
+        // Conflict of interest check: Claimants cannot approve their own claims
+        if (claim.getClaimant() != null && claim.getClaimant().getId().equals(reviewer.getId())) {
+            throw new ForbiddenException("Conflict of interest: Claimants cannot review or approve their own claim requests.");
         }
 
         claim.setStatus(decision.getStatus());

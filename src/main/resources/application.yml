@@ -40,6 +40,9 @@ management:
   endpoint:
     health:
       show-details: always
+  health:
+    redis:
+      enabled: false
 
 # ==============================================================================
 # Swagger / OpenAPI 3 Interactive Documentation
@@ -77,8 +80,8 @@ app:
       # Place your 'firebase-service-account.json' file inside 'src/main/resources/' or specify external path
       service-account-path: ${FIREBASE_CREDENTIALS_PATH:file:D:\.secrets\firebase-service-account.json}
       
-      # Dev Mock Auth: When true, allows testing with dummy Bearer tokens (e.g. 'mock-admin-token') without Firebase
-      dev-mock-auth: true
+      # Dev Mock Auth: False by default; only enabled in dev/test profiles
+      dev-mock-auth: ${APP_SECURITY_DEV_MOCK_AUTH:false}
       
   cors:
     allowed-origins: "${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,https://*.vercel.app,http://localhost:19006,exp://*}"

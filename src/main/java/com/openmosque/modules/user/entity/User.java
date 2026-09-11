@@ -117,6 +117,31 @@ public class User extends BaseEntity {
     private java.util.List<UserBadge> badges = new java.util.ArrayList<>();
 
     /**
+     * Whether Two-Factor Authentication (TOTP) is enabled.
+     */
+    @Column(name = "two_factor_enabled", nullable = false)
+    @Builder.Default
+    private boolean twoFactorEnabled = false;
+
+    /**
+     * Confirmed TOTP secret key (Base32 encoded).
+     */
+    @Column(name = "two_factor_secret")
+    private String twoFactorSecret;
+
+    /**
+     * Pending temporary TOTP secret during enrollment verification.
+     */
+    @Column(name = "two_factor_temp_secret")
+    private String twoFactorTempSecret;
+
+    /**
+     * Comma-separated or JSON list of BCrypt/SHA-256 hashed one-time recovery backup codes.
+     */
+    @Column(name = "two_factor_backup_codes", columnDefinition = "TEXT")
+    private String twoFactorBackupCodes;
+
+    /**
      * Helper method to increment user contribution points.
      */
     public void addPoints(int amount) {

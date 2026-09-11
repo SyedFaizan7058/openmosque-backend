@@ -65,10 +65,14 @@ class MosqueEventServiceTests {
     private User regularUser;
     private Mosque testMosque;
 
+    @Autowired
+    private com.openmosque.modules.claim.repository.MosqueClaimRequestRepository claimRequestRepository;
+
     @BeforeEach
     void setUp() {
         eventRepository.deleteAll();
         khutbahRepository.deleteAll();
+        if (claimRequestRepository != null) claimRequestRepository.deleteAll();
         if (favoriteRepository != null) favoriteRepository.deleteAll();
         mosqueRepository.deleteAll();
 
@@ -100,12 +104,22 @@ class MosqueEventServiceTests {
                 .location(GeoUtils.createPoint(52.1989, 0.1436))
                 .verified(true)
                 .build());
+
+        claimRequestRepository.save(com.openmosque.modules.claim.entity.MosqueClaimRequest.builder()
+                .mosque(testMosque)
+                .claimant(mosqueAdmin)
+                .fullName("Imam Hassan")
+                .phoneNumber("+44123456789")
+                .positionInMosque("Imam")
+                .status(com.openmosque.modules.claim.entity.ClaimStatus.APPROVED)
+                .build());
     }
 
     @org.junit.jupiter.api.AfterEach
     void tearDown() {
         eventRepository.deleteAll();
         khutbahRepository.deleteAll();
+        if (claimRequestRepository != null) claimRequestRepository.deleteAll();
         mosqueRepository.deleteAll();
     }
 

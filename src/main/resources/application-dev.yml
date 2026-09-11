@@ -41,6 +41,10 @@ app:
   rate-limit:
     enabled: true
     backend: ${RATE_LIMIT_BACKEND:local}
+  security:
+    firebase:
+      dev-mock-auth: true
+      enabled: true
 
 # ==============================================================================
 # Logging Configuration
