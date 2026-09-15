@@ -34,6 +34,8 @@ public class PrayerTimesDayResponseDto implements Serializable {
     private String nextPrayerTime;        // "17:15"
     private Long timeRemainingMinutes;    // 45
     private String timeRemainingFormatted;// "in 45 mins"
+    private String asrShafiTime;          // "15:41"
+    private String asrHanafiTime;         // "16:45"
 
     // Prayer Slots (Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha)
     private List<SinglePrayerTimeDto> timings;

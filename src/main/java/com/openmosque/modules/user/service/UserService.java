@@ -140,12 +140,13 @@ public class UserService {
     }
 
     /**
-     * Lists users with pagination and optional role filtering (Super Admin operation).
+     * Lists users with pagination and optional role filtering and search (Super Admin operation).
      */
     @Transactional(readOnly = true)
-    public PageResponse<UserResponseDto> listUsers(UserRole role, Pageable pageable) {
-        Page<User> page = (role != null) 
-                ? userRepository.findByRole(role, pageable)
+    public PageResponse<UserResponseDto> listUsers(UserRole role, String search, Pageable pageable) {
+        String trimmedSearch = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+        Page<User> page = (role != null || trimmedSearch != null)
+                ? userRepository.searchUsers(role, trimmedSearch, pageable)
                 : userRepository.findAll(pageable);
 
         List<UserResponseDto> dtoList = page.getContent().stream()

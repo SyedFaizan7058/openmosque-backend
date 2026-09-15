@@ -41,3 +41,8 @@ secrets/
 uploads/
 *.log
 logs/
+
+### Local Scratch & Tools ###
+_flat/
+flatten.bat
+Claude outputs/

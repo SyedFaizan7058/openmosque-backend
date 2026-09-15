@@ -70,16 +70,39 @@ public class PrayerTimesService {
         LocalDate date = (requestedDate != null) ? requestedDate : LocalDate.now(zoneId);
         LocalTime now = LocalTime.now(zoneId);
 
-        // 3. Fetch Astronomical Timings from Aladhan API
-        AladhanTimingsResponse aladhanResponse = aladhanApiClient.fetchTimings(
-                date,
-                mosque.getLatitude(),
-                mosque.getLongitude(),
-                config.getCalculationMethod().getAladhanMethodId(),
-                config.getJuristicSchool().getAladhanSchoolId()
-        );
+        // 3. Fetch Astronomical Timings from Aladhan API (both primary and alternate juristic school for Asr)
+        int primarySchool = config.getJuristicSchool().getAladhanSchoolId();
+        int altSchool = (primarySchool == 0) ? 1 : 0;
+
+        java.util.concurrent.CompletableFuture<AladhanTimingsResponse> primaryFuture =
+                java.util.concurrent.CompletableFuture.supplyAsync(() -> aladhanApiClient.fetchTimings(
+                        date,
+                        mosque.getLatitude(),
+                        mosque.getLongitude(),
+                        config.getCalculationMethod().getAladhanMethodId(),
+                        primarySchool
+                ));
+
+        java.util.concurrent.CompletableFuture<AladhanTimingsResponse> altFuture =
+                java.util.concurrent.CompletableFuture.supplyAsync(() -> aladhanApiClient.fetchTimings(
+                        date,
+                        mosque.getLatitude(),
+                        mosque.getLongitude(),
+                        config.getCalculationMethod().getAladhanMethodId(),
+                        altSchool
+                ));
+
+        AladhanTimingsResponse aladhanResponse = primaryFuture.join();
+        AladhanTimingsResponse altResponse = altFuture.join();
 
         AladhanTimingsData rawTimings = aladhanResponse.getTimings();
+        AladhanTimingsData altTimings = (altResponse != null) ? altResponse.getTimings() : null;
+
+        String rawAsrPrimary = cleanTime(rawTimings != null ? rawTimings.getAsr() : "16:30");
+        String rawAsrAlt = cleanTime(altTimings != null ? altTimings.getAsr() : (primarySchool == 0 ? "17:30" : "15:30"));
+
+        String asrShafi = (primarySchool == 0) ? rawAsrPrimary : rawAsrAlt;
+        String asrHanafi = (primarySchool == 1) ? rawAsrPrimary : rawAsrAlt;
 
         // 4. Compute Clean Adhan & Iqamah Time Strings (custom Adhan override if set by admin, else astronomical)
         String fajrAdhan = (iqamahSchedule.getFajrAdhanTime() != null)
@@ -91,7 +114,7 @@ public class PrayerTimesService {
                 : cleanTime(rawTimings.getDhuhr());
         String asrAdhan = (iqamahSchedule.getAsrAdhanTime() != null)
                 ? iqamahSchedule.getAsrAdhanTime().format(TIME_FORMAT)
-                : cleanTime(rawTimings.getAsr());
+                : (config.getJuristicSchool() == JuristicSchool.HANAFI ? asrHanafi : asrShafi);
         String maghribAdhan = (iqamahSchedule.getMaghribAdhanTime() != null)
                 ? iqamahSchedule.getMaghribAdhanTime().format(TIME_FORMAT)
                 : cleanTime(rawTimings.getMaghrib());
@@ -110,7 +133,13 @@ public class PrayerTimesService {
         slots.add(SinglePrayerTimeDto.builder().prayerName("FAJR").adhanTime(fajrAdhan).iqamahTime(fajrIqamah).build());
         slots.add(SinglePrayerTimeDto.builder().prayerName("SUNRISE").adhanTime(sunriseTime).iqamahTime(null).build());
         slots.add(SinglePrayerTimeDto.builder().prayerName("DHUHR").adhanTime(dhuhrAdhan).iqamahTime(dhuhrIqamah).build());
-        slots.add(SinglePrayerTimeDto.builder().prayerName("ASR").adhanTime(asrAdhan).iqamahTime(asrIqamah).build());
+        slots.add(SinglePrayerTimeDto.builder()
+                .prayerName("ASR")
+                .adhanTime(asrAdhan)
+                .iqamahTime(asrIqamah)
+                .asrShafiTime(asrShafi)
+                .asrHanafiTime(asrHanafi)
+                .build());
         slots.add(SinglePrayerTimeDto.builder().prayerName("MAGHRIB").adhanTime(maghribAdhan).iqamahTime(maghribIqamah).build());
         slots.add(SinglePrayerTimeDto.builder().prayerName("ISHA").adhanTime(ishaAdhan).iqamahTime(ishaIqamah).build());
 
@@ -142,6 +171,8 @@ public class PrayerTimesService {
                 .nextPrayerTime(countdown.nextPrayerTime)
                 .timeRemainingMinutes(countdown.minutesRemaining)
                 .timeRemainingFormatted(countdown.timeRemainingFormatted)
+                .asrShafiTime(asrShafi)
+                .asrHanafiTime(asrHanafi)
                 .timings(slots)
                 .jummahSchedule(jummah)
                 .build();

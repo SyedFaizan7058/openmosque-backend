@@ -20,4 +20,6 @@ public class SinglePrayerTimeDto implements Serializable {
     private String iqamahTime;        // "05:35" (null for SUNRISE)
     private boolean isNext;           // true if this is the upcoming prayer
     private String timeRemainingFormatted; // "in 42 mins"
+    private String asrShafiTime;      // "15:41" (Shafi'i / Standard Asr start time)
+    private String asrHanafiTime;     // "16:45" (Hanafi Asr start time)
 }

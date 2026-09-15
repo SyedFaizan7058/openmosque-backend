@@ -49,19 +49,22 @@ public class UserAdminController {
     }
 
     /**
-     * List all users with pagination and role filter.
+     * List all users with pagination, role filter, and search query.
      */
     @GetMapping
-    @Operation(summary = "List users", description = "Retrieves paginated list of users with optional role filtering.")
+    @Operation(summary = "List users", description = "Retrieves paginated list of users with optional role filtering and search query.")
     public ResponseEntity<ApiResponse<PageResponse<UserResponseDto>>> listUsers(
             @Parameter(description = "Optional filter by role")
             @RequestParam(value = "role", required = false) UserRole role,
+
+            @Parameter(description = "Optional search query for email or name")
+            @RequestParam(value = "search", required = false) String search,
 
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        PageResponse<UserResponseDto> users = userService.listUsers(role, pageable);
+        PageResponse<UserResponseDto> users = userService.listUsers(role, search, pageable);
         return ResponseEntity.ok(ApiResponse.success(users, "Users retrieved successfully"));
     }
 }
