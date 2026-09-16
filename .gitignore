@@ -31,11 +31,25 @@ target/
 ### Secrets & Credentials (NEVER COMMIT) ###
 *firebase-service-account*.json
 *service-account*.json
+firebase-adminsdk*.json
+google-services.json
 *.key
 *.pem
+*.p12
+*.jks
+*.keystore
+*.crt
+*.cert
 .env
 .env.*
 secrets/
+credentials/
+application-local.properties
+application-local.yml
+application-local.yaml
+application-secrets.properties
+application-secrets.yml
+application-secrets.yaml
 
 ### Local Media & Uploads ###
 uploads/

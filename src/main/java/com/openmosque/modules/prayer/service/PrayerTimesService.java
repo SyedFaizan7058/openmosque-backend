@@ -51,10 +51,9 @@ public class PrayerTimesService {
 
     /**
      * Retrieves the daily prayer schedule, Iqamah congregation times, and next prayer countdown for a mosque.
-     * Results are cached by mosque and date in Redis.
+     * Evaluates live current time and countdown dynamically.
      */
     @Transactional
-    @Cacheable(value = RedisCacheConfig.PRAYER_TIMES_CACHE, key = "#idOrSlug + '_' + (#requestedDate != null ? #requestedDate.toString() : 'today')", unless = "#result == null")
     public PrayerTimesDayResponseDto getPrayerTimesForMosque(String idOrSlug, LocalDate requestedDate) {
         Mosque mosque = findMosqueByIdOrSlug(idOrSlug);
 
@@ -146,10 +145,19 @@ public class PrayerTimesService {
         // 6. Calculate Next Prayer Countdown (if requested for today)
         CountdownState countdown = calculateCountdown(slots, now, (requestedDate == null || requestedDate.isEqual(LocalDate.now(zoneId))));
 
-        // 7. Hijri Date formatting
+        // 7. Secondary Fiqh Timings (Ishraaq, Chaasht, Zawaal, Sunset, Iftaar, Tahajjud, Sahoor End)
+        String ishraaq = computeOffsetTime(sunriseTime, 20);
+        String zawaal = computeOffsetTime(dhuhrAdhan, -5);
+        String chaasht = computeMidpointTime(sunriseTime, zawaal);
+        String sunset = computeOffsetTime(maghribAdhan, -3);
+        String iftaar = maghribAdhan;
+        String sahoorEnd = computeOffsetTime(fajrAdhan, -10);
+        String tahajjud = computeOffsetTime(fajrAdhan, -105);
+
+        // 8. Hijri Date formatting
         String hijriFormatted = formatHijri(aladhanResponse.getDate());
 
-        // 8. Friday Jumu'ah Timings
+        // 9. Friday Jumu'ah Timings
         FridayJummahScheduleDto jummah = FridayJummahScheduleDto.builder()
                 .firstJummahTime(iqamahSchedule.getJummah1Time() != null ? iqamahSchedule.getJummah1Time().format(TIME_FORMAT) : "13:15")
                 .secondJummahTime(iqamahSchedule.getJummah2Time() != null ? iqamahSchedule.getJummah2Time().format(TIME_FORMAT) : null)
@@ -173,6 +181,13 @@ public class PrayerTimesService {
                 .timeRemainingFormatted(countdown.timeRemainingFormatted)
                 .asrShafiTime(asrShafi)
                 .asrHanafiTime(asrHanafi)
+                .ishraaqTime(ishraaq)
+                .chaashtTime(chaasht)
+                .zawaalTime(zawaal)
+                .sunsetTime(sunset)
+                .iftaarTime(iftaar)
+                .tahajjudTime(tahajjud)
+                .sahoorEndTime(sahoorEnd)
                 .timings(slots)
                 .jummahSchedule(jummah)
                 .build();
@@ -355,6 +370,27 @@ public class PrayerTimesService {
         } catch (Exception e) {
             return adhanTimeStr;
         }
+    }
+
+    private String computeOffsetTime(String baseTimeStr, int offsetMinutes) {
+        try {
+            LocalTime time = LocalTime.parse(baseTimeStr, TIME_FORMAT);
+            return (offsetMinutes >= 0 ? time.plusMinutes(offsetMinutes) : time.minusMinutes(-offsetMinutes)).format(TIME_FORMAT);
+        } catch (Exception e) {
+            return baseTimeStr;
+        }
+    }
+
+    private String computeMidpointTime(String time1Str, String time2Str) {
+        try {
+            LocalTime t1 = LocalTime.parse(time1Str, TIME_FORMAT);
+            LocalTime t2 = LocalTime.parse(time2Str, TIME_FORMAT);
+            long diffMinutes = Duration.between(t1, t2).toMinutes();
+            if (diffMinutes > 0) {
+                return t1.plusMinutes(diffMinutes / 2).format(TIME_FORMAT);
+            }
+        } catch (Exception ignored) {}
+        return time1Str;
     }
 
     private CountdownState calculateCountdown(List<SinglePrayerTimeDto> slots, LocalTime now, boolean isToday) {

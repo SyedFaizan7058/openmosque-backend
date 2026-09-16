@@ -6,6 +6,11 @@ import com.openmosque.common.exception.ResourceNotFoundException;
 import com.openmosque.common.model.PageResponse;
 import com.openmosque.common.util.GeoUtils;
 import com.openmosque.modules.user.entity.UserRole;
+import com.openmosque.modules.claim.entity.ClaimStatus;
+import com.openmosque.modules.claim.repository.MosqueClaimRequestRepository;
+import com.openmosque.modules.community.entity.FlagStatus;
+import com.openmosque.modules.community.repository.CommunityContentFlagRepository;
+import com.openmosque.modules.moderation.dto.ModerationCountsDto;
 import com.openmosque.modules.moderation.dto.MosqueSubmissionRequestDto;
 import com.openmosque.modules.moderation.dto.MosqueSubmissionResponseDto;
 import com.openmosque.modules.moderation.dto.SubmissionDecisionDto;
@@ -53,6 +58,8 @@ public class ModerationService {
     private final MosqueSubmissionMapper submissionMapper;
     private final com.openmosque.modules.user.service.BadgeService badgeService;
     private final com.openmosque.modules.notification.service.NotificationService notificationService;
+    private final MosqueClaimRequestRepository claimRepository;
+    private final CommunityContentFlagRepository flagRepository;
 
     /**
      * Submits a new mosque proposal or edit suggestion into the moderation queue.
@@ -77,6 +84,22 @@ public class ModerationService {
 
         MosqueSubmission saved = submissionRepository.save(submission);
         log.info("New mosque submission received from user '{}' (Submission ID: {})", submitter.getEmail(), saved.getId());
+
+        String notifTitle = request.getSubmissionType() == SubmissionType.EDIT_SUGGESTION
+                ? "Edit Suggestion Received"
+                : "Mosque Submission Received";
+        String notifMessage = request.getSubmissionType() == SubmissionType.EDIT_SUGGESTION
+                ? String.format("Your suggested edits for '%s' have been received and queued for community review.", saved.getName())
+                : String.format("Thank you! Your submission for '%s' has been received and queued for community review.", saved.getName());
+        notificationService.notifyUser(
+                submitter,
+                notifTitle,
+                notifMessage,
+                com.openmosque.modules.notification.entity.NotificationType.SUBMISSION_RECEIVED,
+                "/notifications",
+                null
+        );
+
         return submissionMapper.toResponseDto(saved);
     }
 
@@ -186,5 +209,20 @@ public class ModerationService {
         MosqueSubmission updated = submissionRepository.save(submission);
         log.info("Moderator '{}' marked submission '{}' as {}", moderator.getEmail(), submissionId, decision.getStatus());
         return submissionMapper.toResponseDto(updated);
+    }
+
+    /**
+     * Retrieves counts of pending submissions, claim requests, and flagged items for moderation badges.
+     */
+    @Transactional(readOnly = true)
+    public ModerationCountsDto getPendingCounts() {
+        long pendingSubmissions = submissionRepository.countByStatus(SubmissionStatus.PENDING);
+        long pendingClaims = claimRepository.countByStatus(ClaimStatus.PENDING);
+        long pendingFlags = flagRepository.countByStatus(FlagStatus.PENDING);
+        return ModerationCountsDto.builder()
+                .pendingSubmissions(pendingSubmissions)
+                .pendingClaims(pendingClaims)
+                .pendingFlags(pendingFlags)
+                .build();
     }
 }

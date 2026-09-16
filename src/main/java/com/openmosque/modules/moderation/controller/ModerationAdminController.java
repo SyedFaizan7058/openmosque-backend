@@ -2,6 +2,7 @@ package com.openmosque.modules.moderation.controller;
 
 import com.openmosque.common.model.ApiResponse;
 import com.openmosque.common.model.PageResponse;
+import com.openmosque.modules.moderation.dto.ModerationCountsDto;
 import com.openmosque.modules.moderation.dto.MosqueSubmissionResponseDto;
 import com.openmosque.modules.moderation.dto.SubmissionDecisionDto;
 import com.openmosque.modules.moderation.entity.SubmissionStatus;
@@ -63,5 +64,14 @@ public class ModerationAdminController {
     ) {
         MosqueSubmissionResponseDto result = moderationService.reviewSubmission(submissionId, decision, moderator);
         return ResponseEntity.ok(ApiResponse.success(result, "Submission decision recorded successfully"));
+    }
+
+    /**
+     * Get pending moderation counts for sidebar badges.
+     */
+    @GetMapping("/counts")
+    @Operation(summary = "Get pending moderation counts", description = "Retrieves pending counts for submissions, claims, and flags. Requires MODERATOR or SUPER_ADMIN role.")
+    public ResponseEntity<ApiResponse<ModerationCountsDto>> getPendingCounts() {
+        return ResponseEntity.ok(ApiResponse.success(moderationService.getPendingCounts(), "Pending moderation counts retrieved successfully"));
     }
 }

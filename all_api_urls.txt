@@ -1,29 +1,45 @@
 ================================================================================
-OPENMOSQUE BACKEND - ALL 48 API ENDPOINTS & THEIR DIRECT PURPOSES
+OPENMOSQUE BACKEND - COMPLETE & VERIFIED API ENDPOINT DIRECTORY
 ================================================================================
 Base URL: http://localhost:8080
-Documentation: http://localhost:8080/swagger-ui.html
+OpenAPI Spec: http://localhost:8080/v3/api-docs
+Swagger UI Dashboard: http://localhost:8080/swagger-ui.html
+Total Documented Endpoints: 91 Route Endpoints Across 17 Core Modules
+Framework: Spring Boot 3.3.4 (Java 17) + Spring Security 6 + PostGIS + Firebase
 ================================================================================
 
 --------------------------------------------------------------------------------
-MODULE 1: DOCUMENTATION & SYSTEM HEALTH
+MODULE 1: DOCUMENTATION & SYSTEM HEALTH (4 ENDPOINTS)
 --------------------------------------------------------------------------------
 
 1. GET  /v3/api-docs
-   --> Used for getting raw OpenAPI 3.0 JSON specification for Postman imports.
-   - Access: Public (No login required)
+   --> Used for fetching the raw OpenAPI 3.0 JSON specification for Postman/Swagger imports.
+   - Access: Public (No authentication required)
+   - Response: OpenAPI 3.0 Specification in JSON format
 
 2. GET  /swagger-ui.html
-   --> Used for opening interactive Swagger API dashboard in browser to test all APIs.
-   - Access: Public (No login required)
+   --> Used for opening the interactive Swagger API documentation dashboard in any web browser.
+   - Access: Public (No authentication required)
+   - Alias / Sub-paths: /swagger-ui/**
+
+3. GET  /actuator/health
+   --> Used for Spring Boot Actuator application health checking (database connectivity, PostGIS status).
+   - Access: Public (No authentication required)
+   - Response: {"status": "UP"}
+
+4. GET  /actuator/info
+   --> Used for inspecting application build metadata, version info, and runtime properties.
+   - Access: Public (No authentication required)
+
 
 --------------------------------------------------------------------------------
-MODULE 2: USER & AUTHENTICATION MODULE
+MODULE 2: USER IDENTITY & PROFILE MANAGEMENT (9 ENDPOINTS)
 --------------------------------------------------------------------------------
 
-3. POST /api/v1/users/sync
-   --> Used for synchronizing & onboarding new Firebase users into PostgreSQL database.
-   - Access: Public (Called after user logs in on Mobile/Web frontend)
+5. POST /api/v1/users/sync
+   --> Used for synchronizing and onboarding Firebase authenticated users into PostgreSQL.
+   - Access: Public (Called immediately after successful Firebase Auth on Web/Mobile)
+   - Notes: Also sets HttpOnly 'om_access_token' cookie for seamless web session handling.
    - Request Body:
      {
        "firebaseUid": "FIREBASE_USER_UID",
@@ -32,388 +48,762 @@ MODULE 2: USER & AUTHENTICATION MODULE
        "phoneNumber": "+1234567890",
        "photoUrl": "https://example.com/avatar.jpg"
      }
+   - Response: ApiResponse<UserResponseDto> (User entity with role, contribution points, badges)
 
-4. GET  /api/v1/users/me
-   --> Used for getting current logged-in user's profile, contribution points, and role.
-   - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+6. GET  /api/v1/users/me
+   --> Used for retrieving the currently logged-in user's profile, role, points, and account metadata.
+   - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>' or HttpOnly Cookie)
+   - Response: ApiResponse<UserResponseDto>
 
---------------------------------------------------------------------------------
-MODULE 3: FACILITIES & AMENITIES CATALOG MODULE
---------------------------------------------------------------------------------
-
-5. GET  /api/v1/facilities
-   --> Used for getting all active Islamic facilities/amenities (Wudu area, Women section, Parking, Wheelchair accessibility, etc.).
-   - Access: Public (No login required)
-
---------------------------------------------------------------------------------
-MODULE 4: MOSQUE DIRECTORY & GEOSPATIAL DISCOVERY MODULE
---------------------------------------------------------------------------------
-
-6. GET  /api/v1/mosques/nearby
-   --> Used for finding nearby mosques within a radius using user's GPS Latitude & Longitude.
-   - Access: Public (No login required)
-   - Example Query: /api/v1/mosques/nearby?latitude=51.5173&longitude=-0.0658&radiusKm=10&facilities=PARKING,WOMENS_SECTION
-   - Result: Returns list of closest mosques sorted by distance in kilometers with cover photos.
-
-7. GET  /api/v1/mosques/search
-   --> Used for searching mosques by keyword (name, address), city, or country with pagination.
-   - Access: Public (No login required)
-   - Example Query: /api/v1/mosques/search?q=Central&city=London&page=0&size=20
-
-8. GET  /api/v1/mosques/{idOrSlug}
-   --> Used for getting full mosque profile (details, photo gallery, facilities list, and live broadcast link).
-   - Access: Public (No login required)
-   - Example: /api/v1/mosques/east-london-mosque-london or /api/v1/mosques/18558e48-a2aa-4219-9583-54cd9a84a76c
-
---------------------------------------------------------------------------------
-MODULE 5: CROWDSOURCING & USER CONTRIBUTIONS MODULE
---------------------------------------------------------------------------------
-
-9. POST /api/v1/mosques/submissions
-   --> Used for submitting a new mosque proposal by any user to be reviewed by moderators.
-   - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
-   - Note: Contributor automatically earns +100 reward points when approved.
+7. PUT  /api/v1/users/me/location
+   --> Used for updating the current user's preferred home/work GPS coordinates, city, and country.
+   - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+   - Aliases:
+     - PATCH /api/v1/users/me/location
+     - PUT   /api/v1/users/location
+     - PATCH /api/v1/users/location
    - Request Body:
      {
-       "name": "Birmingham Central Mosque",
-       "description": "Historic mosque in Birmingham",
-       "address": "180 Belgrave Middleway",
-       "city": "Birmingham",
-       "country": "United Kingdom",
-       "latitude": 52.4678,
-       "longitude": -1.8906,
-       "contactPhone": "+44 121 440 5355",
-       "websiteUrl": "https://birminghamcentralmosque.org.uk",
-       "liveStreamUrl": "https://youtube.com/live/stream-id",
-       "facilityCodes": ["PARKING", "WUDU_AREA", "WOMENS_SECTION"],
-       "imageUrls": ["https://images.unsplash.com/mosque.jpg"]
+       "latitude": 51.5074,
+       "longitude": -0.1278,
+       "city": "London",
+       "country": "United Kingdom"
      }
+   - Response: ApiResponse<UserResponseDto>
 
-10. POST /api/v1/mosques/{id}/suggest-edit
-    --> Used for suggesting corrections or updates to an existing mosque profile.
-    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
-    - Note: Contributor automatically earns +50 reward points when approved.
+8. POST /api/v1/auth/session
+   --> Used for establishing an HttpOnly cookie session on the web client using a valid Firebase ID token.
+   - Access: Public
+   - Request Body:
+     {
+       "idToken": "FIREBASE_ID_TOKEN"
+     }
+   - Response: ApiResponse<Void> with 'Set-Cookie: om_access_token=...; HttpOnly; SameSite=Lax; Path=/'
+
+9. POST /api/v1/auth/logout
+   --> Used for clearing the server-side HttpOnly authentication cookie on logout.
+   - Access: Public
+   - Response: ApiResponse<Void> with expired 'Set-Cookie: om_access_token=; Max-Age=0'
+
+10. GET /api/v1/badges
+    --> Used for listing all platform achievement badges (Pioneer, Scholar, Mosque Guide, etc.).
+    - Access: Public (No authentication required)
+    - Response: ApiResponse<List<BadgeResponseDto>>
+
+11. GET /api/v1/users/me/badges
+    --> Used for listing the achievement badges earned by the currently logged-in user.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Response: ApiResponse<List<UserBadgeResponseDto>>
+
+12. GET /api/v1/users/{id}/badges
+    --> Used for viewing badges earned by any specific user profile (by User UUID).
+    - Access: Public (No authentication required)
+    - Response: ApiResponse<List<UserBadgeResponseDto>>
+
 
 --------------------------------------------------------------------------------
-MODULE 6: MOSQUE CLAIMING & ADMIN ACCESS MODULE (WAY B)
+MODULE 3: TWO-FACTOR AUTHENTICATION (2FA - TOTP) (6 ENDPOINTS)
 --------------------------------------------------------------------------------
 
-11. POST /api/v1/mosques/{id}/claim
-    --> Used by Imams and Committee members to request administrative ownership of a mosque.
-    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+13. GET  /api/v1/auth/2fa/status
+    --> Used for checking if 2FA (Time-based One-Time Password) is currently enabled for the user.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Response: ApiResponse<TwoFactorStatusDto> (isEnabled: boolean, backupCodesRemaining: number)
+
+14. POST /api/v1/auth/2fa/setup
+    --> Used for initiating 2FA setup; generates a shared TOTP secret and QR code URI.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Response: ApiResponse<TwoFactorSetupResponseDto> (secretKey, qrCodeUri, backupCodes)
+
+15. POST /api/v1/auth/2fa/enable
+    --> Used for confirming 2FA setup by verifying a valid 6-digit TOTP code from authenticator app.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
     - Request Body:
       {
-        "fullName": "Imam Tariq Al-Banna",
-        "phoneNumber": "+44 20 7654 3210",
-        "officialEmail": "imam@eastlondonmosque.org",
-        "positionInMosque": "Head Imam & Trustee",
-        "proofDocumentUrl": "https://docs.example.com/charity-certificate.pdf"
+        "code": "123456"
       }
+    - Response: ApiResponse<Void>
 
-12. GET  /api/v1/admin/mosques/claims
-    --> Used by Moderators and Admins to view the queue of pending mosque claim requests.
-    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
-    - Example Query: /api/v1/admin/mosques/claims?status=PENDING&page=0&size=20
-
-13. PATCH /api/v1/admin/mosques/claims/{id}/decision
-    --> Used by Moderators to approve/reject a mosque claim.
-    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
-    - Action on Approval: Automatically upgrades the claimant's role to MOSQUE_ADMIN and marks mosque as verified.
+16. POST /api/v1/auth/2fa/verify
+    --> Used during login challenge to verify a TOTP code or 8-character backup code.
+    - Access: Authenticated / Session Token
     - Request Body:
       {
-        "status": "APPROVED", // or "REJECTED"
-        "reviewComments": "Official charity certificate verified."
+        "code": "123456"
       }
+    - Response: ApiResponse<TwoFactorVerifyResponseDto> (verified: true)
 
---------------------------------------------------------------------------------
-MODULE 7: USER & ROLE MANAGEMENT (SUPER ADMIN - WAY A)
---------------------------------------------------------------------------------
-
-14. PATCH /api/v1/admin/users/{id}/role
-    --> Used by Super Admins to directly change any user's role (USER, MOSQUE_ADMIN, MODERATOR, SUPER_ADMIN).
-    - Access: Restricted (Requires ROLE_SUPER_ADMIN)
+17. POST /api/v1/auth/2fa/disable
+    --> Used for disabling 2FA on the user's account after confirming with current TOTP code or password.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
     - Request Body:
       {
-        "role": "MODERATOR" // or "MOSQUE_ADMIN", "SUPER_ADMIN", "USER"
+        "code": "123456"
       }
+    - Response: ApiResponse<Void>
 
-15. GET  /api/v1/admin/users
-    --> Used by Super Admins to list and search all registered users by role with pagination.
-    - Access: Restricted (Requires ROLE_SUPER_ADMIN)
-    - Example Query: /api/v1/admin/users?role=MOSQUE_ADMIN&page=0&size=20
+18. POST /api/v1/auth/2fa/regenerate-backup-codes
+    --> Used for regenerating a new set of emergency recovery/backup codes.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Response: ApiResponse<List<String>> (List of 8 single-use backup codes)
+
 
 --------------------------------------------------------------------------------
-MODULE 8: MODERATION & ADMIN REVIEW QUEUE MODULE
+MODULE 4: FACILITIES & AMENITIES CATALOG (1 ENDPOINT)
 --------------------------------------------------------------------------------
 
-16. GET  /api/v1/admin/moderation/submissions
-    --> Used by moderators to view the list of pending crowdsourced mosque submissions.
-    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
-    - Example Query: /api/v1/admin/moderation/submissions?status=PENDING&page=0&size=20
+19. GET /api/v1/facilities
+    --> Used for retrieving the catalog of all active mosque amenities and facility filter tags.
+    - Access: Public (No authentication required)
+    - Codes: WUDU_AREA, WOMENS_SECTION, WHEELCHAIR_ACCESSIBLE, PARKING, JANAZAH_SERVICE,
+             QURAN_CLASSES, TARAWIH_PRAYER, ITIKAF_AVAILABLE, HALAL_FOOD_NEARBY, LIBRARY
+    - Response: ApiResponse<List<FacilityDto>>
 
-17. PATCH /api/v1/admin/moderation/submissions/{id}/decision
-    --> Used by moderators to approve or reject a mosque submission & award contributor points.
-    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+
+--------------------------------------------------------------------------------
+MODULE 5: MOSQUE DIRECTORY & GEOSPATIAL DISCOVERY (5 ENDPOINTS)
+--------------------------------------------------------------------------------
+
+20. GET /api/v1/mosques/nearby
+    --> Used for PostGIS geospatial radius discovery: finds closest mosques from GPS coordinates.
+    - Access: Public (No authentication required)
+    - Query Parameters:
+      - latitude: float [-90.0 to 90.0] (Required, e.g. 51.5173)
+      - longitude: float [-180.0 to 180.0] (Required, e.g. -0.0658)
+      - radiusKm: float (Optional, default: 10.0)
+      - facilities: comma-separated codes (Optional, e.g. 'WOMENS_SECTION,PARKING')
+    - Response: ApiResponse<List<MosqueSummaryDto>> sorted by distance in kilometers
+
+21. GET /api/v1/mosques
+    --> Used for paginated keyword, city, and country search across the global mosque directory.
+    - Access: Public (No authentication required)
+    - Aliases:
+      - GET /api/v1/mosques/search
+      - GET /api/v1/mosques/
+    - Query Parameters:
+      - q: string (Optional keyword matching name or address)
+      - city: string (Optional city filter, e.g. 'London')
+      - country: string (Optional country filter, e.g. 'United Kingdom')
+      - page: integer (Optional, 0-indexed, default: 0)
+      - size: integer (Optional, default: 20)
+    - Response: ApiResponse<PageResponse<MosqueSummaryDto>>
+
+22. GET /api/v1/mosques/{idOrSlug}
+    --> Used for retrieving a mosque's complete profile by UUID or unique URL slug.
+    - Access: Public (No authentication required)
+    - Path Variable: idOrSlug (UUID e.g. '18558e48-...' or Slug e.g. 'east-london-mosque-london')
+    - Response: ApiResponse<MosqueResponseDto> (details, coordinates, contact, photos, facilities, liveStreamUrl)
+
+23. PUT /api/v1/mosques/{id}
+    --> Used by approved Mosque Administrators or Super Admins to update an existing mosque profile.
+    - Access: Mosque Admin / Super Admin (Requires MOSQUE_ADMIN or SUPER_ADMIN role)
+    - Path Variable: id (Mosque UUID)
+    - Request Body: MosqueUpdateRequestDto (name, description, contactPhone, websiteUrl, liveStreamUrl, facilityCodes, imageUrls)
+    - Response: ApiResponse<MosqueResponseDto>
+
+
+--------------------------------------------------------------------------------
+MODULE 6: USER FAVORITES & BOOKMARKS (4 ENDPOINTS)
+--------------------------------------------------------------------------------
+
+24. GET    /api/v1/users/me/favorites
+    --> Used for retrieving all mosques saved/bookmarked by the currently authenticated user.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Response: ApiResponse<List<MosqueSummaryDto>>
+
+25. POST   /api/v1/users/me/favorites/{mosqueId}
+    --> Used for adding a mosque to the user's personal favorites list.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Alias: POST /api/v1/mosques/{mosqueId}/favorite
+    - Path Variable: mosqueId (UUID)
+    - Response: ApiResponse<Void> ("Mosque added to favorites")
+
+26. DELETE /api/v1/users/me/favorites/{mosqueId}
+    --> Used for removing a mosque from the user's personal favorites list.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Alias: DELETE /api/v1/mosques/{mosqueId}/favorite
+    - Path Variable: mosqueId (UUID)
+    - Response: ApiResponse<Void> ("Mosque removed from favorites")
+
+27. GET    /api/v1/users/me/favorites/{mosqueId}/status
+    --> Used for checking whether a specific mosque is bookmarked by the user.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Aliases:
+      - GET /api/v1/mosques/{mosqueId}/is-favorite
+      - GET /api/v1/mosques/{mosqueId}/favorite
+    - Path Variable: mosqueId (UUID)
+    - Response: ApiResponse<Boolean> (true if favorited, false otherwise)
+
+
+--------------------------------------------------------------------------------
+MODULE 7: PRAYER TIMES & IQAMAH SCHEDULE MANAGEMENT (6 ENDPOINTS)
+--------------------------------------------------------------------------------
+
+28. GET /api/v1/mosques/{idOrSlug}/prayer-times
+    --> Used for fetching today's astronomical prayer times (Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha)
+        along with official mosque-specific Iqamah congregation times.
+    - Access: Public (No authentication required)
+    - Query Parameters:
+      - date: ISO date string 'YYYY-MM-DD' (Optional, defaults to today)
+    - Response: ApiResponse<PrayerTimesResponseDto> (adhan times, iqamah times, calculation method, next prayer countdown)
+
+29. GET /api/v1/prayer-times/methods
+    --> Used for retrieving all 14 supported astronomical prayer calculation conventions
+        (MWL, ISNA, Egypt, Makkah, Karachi, Tehran, Jafari, Gulf, Kuwait, Qatar, Singapore, France, Turkey, Russia).
+    - Access: Public (No authentication required)
+    - Response: ApiResponse<List<CalculationMethodDto>>
+
+30. GET /api/v1/mosque-admin/mosques/{id}/prayer-config
+    --> Used by mosque admins to inspect calculation settings (method, Asr school Hanafi/Shafi'i, manual offsets).
+    - Access: Mosque Admin / Super Admin (Requires MOSQUE_ADMIN or SUPER_ADMIN role)
+    - Path Variable: id (Mosque UUID)
+    - Response: ApiResponse<PrayerConfigDto>
+
+31. PUT /api/v1/mosque-admin/mosques/{id}/prayer-config
+    --> Used by mosque admins to update calculation method, Asr juristic school, and minute offsets.
+    - Access: Mosque Admin / Super Admin (Requires MOSQUE_ADMIN or SUPER_ADMIN role)
+    - Path Variable: id (Mosque UUID)
     - Request Body:
       {
-        "status": "APPROVED", // or "REJECTED"
-        "reviewComments": "Address and facilities verified. Excellent submission."
+        "calculationMethod": "ISNA",
+        "juristicSchool": "HANAFI",
+        "fajrAngle": 15.0,
+        "ishaAngle": 15.0,
+        "fajrOffsetMinutes": 0,
+        "dhuhrOffsetMinutes": 5,
+        "asrOffsetMinutes": 0,
+        "maghribOffsetMinutes": 3,
+        "ishaOffsetMinutes": 0
       }
-    - Action on Approval: Automatically creates live Mosque entry and awards points to user.
+    - Response: ApiResponse<PrayerConfigDto>
 
---------------------------------------------------------------------------------
-MODULE 9: PRAYER TIMES ENGINE & MOSQUE ADMIN IQAMAH SCHEDULE (PHASE 3)
---------------------------------------------------------------------------------
+32. GET /api/v1/mosque-admin/mosques/{id}/iqamah-schedule
+    --> Used by mosque admins to inspect fixed congregational prayer times and dynamic offset rules.
+    - Access: Mosque Admin / Super Admin (Requires MOSQUE_ADMIN or SUPER_ADMIN role)
+    - Path Variable: id (Mosque UUID)
+    - Response: ApiResponse<IqamahScheduleDto>
 
-18. GET  /api/v1/mosques/{idOrSlug}/prayer-times
-    --> Used for getting daily calculated Adhan times, Mosque Iqamah overrides, and next prayer countdown.
-    - Access: Public (No login required)
-    - Query Parameters: ?date=2026-09-02 (optional, defaults to today)
-    - Response: Includes Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha, Next prayer countdown, and Friday Jumu'ah batches.
-
-19. GET  /api/v1/prayer-times/methods
-    --> Used for getting list of supported astronomical calculation methods (ISNA, MWL, Umm Al-Qura, Karachi, Egypt, etc.).
-    - Access: Public (No login required)
-
-20. GET  /api/v1/mosque-admin/mosques/{id}/prayer-config
-    --> Used by Mosque Admins to retrieve their mosque's calculation method, school (Hanafi/Standard), and angles.
-    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
-
-21. PUT  /api/v1/mosque-admin/mosques/{id}/prayer-config
-    --> Used by Mosque Admins to update their calculation method, school (Hanafi/Standard), and timezone.
-    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+33. PUT /api/v1/mosque-admin/mosques/{id}/iqamah-schedule
+    --> Used by mosque admins to configure daily Iqamah timings (fixed time vs minutes after Adhan).
+    - Access: Mosque Admin / Super Admin (Requires MOSQUE_ADMIN or SUPER_ADMIN role)
+    - Path Variable: id (Mosque UUID)
     - Request Body:
       {
-        "calculationMethod": "MUSLIM_WORLD_LEAGUE", // "ISNA", "UMM_AL_QURA", "KARACHI", etc.
-        "juristicSchool": "STANDARD",              // or "HANAFI"
-        "timeZone": "Europe/London"
-      }
-
-22. GET  /api/v1/mosque-admin/mosques/{id}/iqamah-schedule
-    --> Used by Mosque Admins to get current congregation Iqamah rules, offsets, and Jumu'ah batches.
-    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
-
-23. PUT  /api/v1/mosque-admin/mosques/{id}/iqamah-schedule
-    --> Used by Mosque Admins to configure congregation Iqamah offsets (e.g. +20 mins), fixed times, and Friday Jumu'ah batches.
-    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
-    - Request Body:
-      {
-        "fajrType": "OFFSET_AFTER_ADHAN",
-        "fajrOffsetMinutes": 20,
-        "dhuhrType": "FIXED_TIME",
-        "dhuhrFixedTime": "13:30:00",
-        "asrType": "OFFSET_AFTER_ADHAN",
-        "asrOffsetMinutes": 15,
-        "maghribType": "OFFSET_AFTER_ADHAN",
+        "fajrType": "FIXED_TIME",
+        "fajrFixedTime": "05:30",
+        "dhuhrType": "AFTER_ADHAN",
+        "dhuhrOffsetMinutes": 15,
+        "asrType": "FIXED_TIME",
+        "asrFixedTime": "16:45",
+        "maghribType": "AFTER_ADHAN",
         "maghribOffsetMinutes": 10,
-        "ishaType": "OFFSET_AFTER_ADHAN",
-        "ishaOffsetMinutes": 15,
-        "jummah1Time": "13:15:00",
-        "jummah2Time": "14:00:00",
-        "jummahKhutbahLanguage": "English & Arabic"
+        "ishaType": "FIXED_TIME",
+        "ishaFixedTime": "20:00"
       }
+    - Response: ApiResponse<IqamahScheduleDto>
+
 
 --------------------------------------------------------------------------------
-MODULE 10: MEDIA UPLOADS & CLOUD STORAGE ENGINE (PHASE 4)
+MODULE 8: COMMUNITY EVENTS & JUMU'AH KHUTBAHS (9 ENDPOINTS)
 --------------------------------------------------------------------------------
 
-24. POST /api/v1/media/upload-url
-    --> Used for generating a pre-signed PUT URL for direct-to-cloud photo uploads (GCS/local mock).
-    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+34. GET    /api/v1/mosques/{idOrSlug}/events
+    --> Used for listing all upcoming lectures, classes, Ramadan dinners, and youth events for a mosque.
+    - Access: Public (No authentication required)
+    - Response: ApiResponse<List<EventResponseDto>>
+
+35. GET    /api/v1/events/{id}
+    --> Used for viewing full details of a specific event (speaker, location, start/end time, registration).
+    - Access: Public (No authentication required)
+    - Path Variable: id (Event UUID)
+    - Response: ApiResponse<EventResponseDto>
+
+36. POST   /api/v1/mosque-admin/mosques/{id}/events
+    --> Used by mosque admins to schedule a new community event.
+    - Access: Mosque Admin / Super Admin (Requires MOSQUE_ADMIN or SUPER_ADMIN role)
+    - Path Variable: id (Mosque UUID)
     - Request Body:
       {
-        "fileName": "front_facade.jpg",
-        "contentType": "image/jpeg",
-        "folderCategory": "MOSQUE_IMAGE" // "PROOF_DOCUMENT", "EVENT_BANNER", "USER_AVATAR"
+        "title": "Tafseer of Surah Al-Kahf",
+        "description": "Weekly Friday evening lecture series",
+        "startTime": "2026-10-01T19:30:00Z",
+        "endTime": "2026-10-01T21:00:00Z",
+        "speaker": "Shaykh Bilal",
+        "location": "Main Prayer Hall",
+        "registrationUrl": "https://example.com/register",
+        "bannerUrl": "https://example.com/event.jpg"
       }
-    - Response: { uploadUrl, publicUrl, objectKey, expiresAt }
+    - Response: ApiResponse<EventResponseDto>
 
-25. PUT  /api/v1/media/mock-upload
-    --> Dev mock upload destination for local testing without cloud credentials.
-    - Access: Public
+37. PUT    /api/v1/mosque-admin/mosques/{id}/events/{eventId}
+    --> Used by mosque admins to update an existing event.
+    - Access: Mosque Admin / Super Admin (Requires MOSQUE_ADMIN or SUPER_ADMIN role)
+    - Path Variables: id (Mosque UUID), eventId (Event UUID)
+    - Response: ApiResponse<EventResponseDto>
 
---------------------------------------------------------------------------------
-MODULE 11: MOSQUE COMMUNITY EVENTS & FRIDAY KHUTBAH MANAGEMENT (PHASE 4)
---------------------------------------------------------------------------------
+38. DELETE /api/v1/mosque-admin/mosques/{id}/events/{eventId}
+    --> Used by mosque admins to delete or cancel an event.
+    - Access: Mosque Admin / Super Admin (Requires MOSQUE_ADMIN or SUPER_ADMIN role)
+    - Path Variables: id (Mosque UUID), eventId (Event UUID)
+    - Response: ApiResponse<Void>
 
-26. GET  /api/v1/mosques/{idOrSlug}/events
-    --> Used for exploring upcoming mosque programs, halaqahs, workshops, and youth activities.
-    - Access: Public (No login required)
-    - Query Parameters: ?type=HALAQAH&page=0&size=10
+39. GET    /api/v1/mosques/{idOrSlug}/khutbahs
+    --> Used for listing upcoming Friday Jumu'ah prayer shifts, khateebs, languages, and start times.
+    - Access: Public (No authentication required)
+    - Response: ApiResponse<List<KhutbahResponseDto>>
 
-27. GET  /api/v1/events/{id}
-    --> Used for viewing full details of a specific scheduled mosque event.
-    - Access: Public (No login required)
-
-28. GET  /api/v1/mosques/{idOrSlug}/khutbahs
-    --> Used for retrieving scheduled Friday Jumu'ah khutbah topics, speakers, times, and live stream links.
-    - Access: Public (No login required)
-
-29. POST /api/v1/mosque-admin/mosques/{id}/events
-    --> Used by Mosque Admins to schedule a new community event or halaqah.
-    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+40. POST   /api/v1/mosque-admin/mosques/{id}/khutbahs
+    --> Used by mosque admins to publish a Friday Jumu'ah prayer shift schedule.
+    - Access: Mosque Admin / Super Admin (Requires MOSQUE_ADMIN or SUPER_ADMIN role)
+    - Path Variable: id (Mosque UUID)
     - Request Body:
       {
-        "title": "Ramadan Quran Tafseer",
-        "description": "Daily reflection post-Asr",
-        "eventType": "HALAQAH",
-        "audience": "ALL",
-        "startDateTime": "2026-09-10T17:00:00Z",
-        "endDateTime": "2026-09-10T18:30:00Z",
-        "speakerName": "Shaykh Abdul Rahman",
-        "locationDetails": "Main Prayer Hall"
-      }
-
-30. PUT  /api/v1/mosque-admin/mosques/{id}/events/{eventId}
-    --> Used by Mosque Admins to modify an event's details or timing.
-    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
-
-31. DELETE /api/v1/mosque-admin/mosques/{id}/events/{eventId}
-    --> Used by Mosque Admins to cancel/delete a scheduled event.
-    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
-
-32. POST /api/v1/mosque-admin/mosques/{id}/khutbahs
-    --> Used by Mosque Admins to schedule upcoming Friday Khutbah topic, speaker, and broadcast links.
-    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
-    - Request Body:
-      {
-        "khutbahDate": "2026-09-11",
-        "topic": "Upholding Justice and Mercy",
-        "khatibName": "Imam Tariq",
-        "batchNumber": 1,
-        "khutbahTime": "13:00:00",
-        "adhaanTime": "12:45:00",
-        "iqamahTime": "13:30:00",
+        "khateeb": "Imam Abdul Rahman",
+        "topic": "Patience and Perseverance in Faith",
         "language": "English & Arabic",
-        "streamUrl": "https://youtube.com/live/stream-id"
+        "shiftNumber": 1,
+        "adhanTime": "13:00",
+        "khutbahStartTime": "13:15",
+        "prayerStartTime": "13:45",
+        "activeDate": "2026-10-02"
       }
+    - Response: ApiResponse<KhutbahResponseDto>
 
-33. PUT  /api/v1/mosque-admin/mosques/{id}/khutbahs/{khutbahId}
-    --> Used by Mosque Admins to update Friday Khutbah details.
-    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+41. PUT    /api/v1/mosque-admin/mosques/{id}/khutbahs/{khutbahId}
+    --> Used by mosque admins to edit a Friday khutbah schedule.
+    - Access: Mosque Admin / Super Admin (Requires MOSQUE_ADMIN or SUPER_ADMIN role)
+    - Path Variables: id (Mosque UUID), khutbahId (Khutbah UUID)
+    - Response: ApiResponse<KhutbahResponseDto>
 
-34. DELETE /api/v1/mosque-admin/mosques/{id}/khutbahs/{khutbahId}
-    --> Used by Mosque Admins to remove a Friday Khutbah entry.
-    - Access: Restricted (Requires ROLE_MOSQUE_ADMIN or ROLE_SUPER_ADMIN)
+42. DELETE /api/v1/mosque-admin/mosques/{id}/khutbahs/{khutbahId}
+    --> Used by mosque admins to remove a Friday khutbah schedule.
+    - Access: Mosque Admin / Super Admin (Requires MOSQUE_ADMIN or SUPER_ADMIN role)
+    - Path Variables: id (Mosque UUID), khutbahId (Khutbah UUID)
+    - Response: ApiResponse<Void>
+
 
 --------------------------------------------------------------------------------
-MODULE 12: COMMUNITY REVIEWS, RATINGS & Q&A MODERATION ENGINE (PHASE 4)
+MODULE 9: COMMUNITY RATINGS, REVIEWS & Q&A FORUM (14 ENDPOINTS)
 --------------------------------------------------------------------------------
 
-35. GET  /api/v1/mosques/{idOrSlug}/reviews
-    --> Used for getting paginated community reviews with category breakdown.
-    - Access: Public (No login required)
+43. GET    /api/v1/mosques/{idOrSlug}/reviews
+    --> Used for retrieving paginated community reviews and user experiences for a mosque.
+    - Access: Public (No authentication required)
+    - Query Parameters: page (default 0), size (default 10)
+    - Response: ApiResponse<PageResponse<ReviewResponseDto>>
 
-36. GET  /api/v1/mosques/{id}/ratings
-    --> Used for getting aggregated category rating averages (Overall, Cleanliness, Facilities, Women's Area, Parking).
-    - Access: Public (No login required)
+44. GET    /api/v1/mosques/{idOrSlug}/ratings
+    --> Used for retrieving aggregate star ratings across 5 key dimensions:
+        Overall, Cleanliness, Facilities, Women's Area, and Parking.
+    - Access: Public (No authentication required)
+    - Alias: GET /api/v1/mosques/{idOrSlug}/ratings-summary
+    - Response: ApiResponse<RatingSummaryDto>
 
-37. GET  /api/v1/mosques/{idOrSlug}/questions
-    --> Used for getting public community Q&A threads with verified Imam answers.
-    - Access: Public (No login required)
-
-38. POST /api/v1/mosques/{id}/reviews
-    --> Used by worshippers to post a review and category star ratings (1 review per mosque).
-    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+45. POST   /api/v1/mosques/{id}/reviews
+    --> Used by authenticated users to write a review with star ratings and comments.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Path Variable: id (Mosque UUID)
     - Request Body:
       {
-        "ratingOverall": 5,
-        "ratingCleanliness": 5,
-        "ratingFacilities": 4,
-        "ratingWomensArea": 5,
-        "ratingParking": 4,
-        "reviewText": "Pristine wudu area and very warm atmosphere."
+        "overallRating": 5,
+        "cleanlinessRating": 5,
+        "facilitiesRating": 4,
+        "womensAreaRating": 5,
+        "parkingRating": 4,
+        "comment": "Very peaceful, spacious prayer hall and spotless wudu facilities."
       }
+    - Response: ApiResponse<ReviewResponseDto>
 
-39. PUT  /api/v1/mosques/{id}/reviews/{reviewId}
-    --> Used by review author to update their rating and comments.
-    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+46. PUT    /api/v1/mosques/{id}/reviews/{reviewId}
+    --> Used by authors to edit an existing review they previously published.
+    - Access: Authenticated (Owner of review only)
+    - Alias: PUT /api/v1/community/reviews/{reviewId}
+    - Path Variables: id (Mosque UUID), reviewId (Review UUID)
+    - Response: ApiResponse<ReviewResponseDto>
 
-40. DELETE /api/v1/mosques/{id}/reviews/{reviewId}
-    --> Used by review author to delete their review.
-    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+47. DELETE /api/v1/mosques/{id}/reviews/{reviewId}
+    --> Used by review authors or moderators to delete a review.
+    - Access: Authenticated (Owner or Moderator/Admin)
+    - Alias: DELETE /api/v1/community/reviews/{reviewId}
+    - Path Variables: id (Mosque UUID), reviewId (Review UUID)
+    - Response: ApiResponse<Void>
 
-41. POST /api/v1/mosques/{id}/questions
-    --> Used by worshippers to ask a question about the mosque.
-    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+48. GET    /api/v1/mosques/{idOrSlug}/questions
+    --> Used for listing community Q&A question threads with replies and Imam verified badges.
+    - Access: Public (No authentication required)
+    - Query Parameters: page (default 0), size (default 10)
+    - Response: ApiResponse<PageResponse<QuestionResponseDto>>
+
+49. POST   /api/v1/mosques/{id}/questions
+    --> Used by authenticated users to ask a question about mosque operations or facilities.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Path Variable: id (Mosque UUID)
     - Request Body:
       {
-        "questionText": "Is wheelchair accessibility available for the sisters area?"
+        "questionText": "Is the women's entrance accessible via wheelchair?"
       }
+    - Response: ApiResponse<QuestionResponseDto>
 
-42. POST /api/v1/community/questions/{questionId}/answers
-    --> Used to answer a question. Automatically tagged as official if answered by Mosque Admin or Imam.
-    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+50. PUT    /api/v1/community/questions/{questionId}
+    --> Used by authors to edit their question.
+    - Access: Authenticated (Owner of question only)
+    - Path Variable: questionId (Question UUID)
+    - Response: ApiResponse<QuestionResponseDto>
+
+51. DELETE /api/v1/community/questions/{questionId}
+    --> Used by question authors or moderators to remove a question thread.
+    - Access: Authenticated (Owner or Moderator/Admin)
+    - Path Variable: questionId (Question UUID)
+    - Response: ApiResponse<Void>
+
+52. POST   /api/v1/community/questions/{questionId}/answers
+    --> Used by community members or verified mosque admins to post an answer to a question.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Path Variable: questionId (Question UUID)
     - Request Body:
       {
-        "answerText": "Yes, elevator access is available at Entrance B."
+        "answerText": "Yes, there is an elevator next to the main garden entrance with step-free access."
       }
+    - Response: ApiResponse<AnswerResponseDto> (marked with isVerified if posted by mosque admin)
 
-43. POST /api/v1/community/flag
-    --> Used to report inappropriate, abusive, or spam content to community moderators.
-    - Access: Authenticated (Requires Header: 'Authorization: Bearer <token>')
+53. PUT    /api/v1/community/answers/{answerId}
+    --> Used by answer authors to edit their posted answer.
+    - Access: Authenticated (Owner of answer only)
+    - Path Variable: answerId (Answer UUID)
+    - Response: ApiResponse<AnswerResponseDto>
+
+54. DELETE /api/v1/community/answers/{answerId}
+    --> Used by answer authors or moderators to delete an answer.
+    - Access: Authenticated (Owner or Moderator/Admin)
+    - Path Variable: answerId (Answer UUID)
+    - Response: ApiResponse<Void>
+
+55. POST   /api/v1/community/flag
+    --> Used by users to report abusive, inappropriate, or spam reviews, questions, or answers.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
     - Request Body:
       {
-        "targetType": "REVIEW", // "QUESTION", "ANSWER"
-        "targetId": "uuid-here",
-        "reason": "Offensive language or spam"
+        "targetType": "REVIEW", // REVIEW, QUESTION, ANSWER, MOSQUE
+        "targetId": "UUID_OF_FLAGGED_ITEM",
+        "reason": "SPAM" // SPAM, INAPPROPRIATE, HARASSMENT, MISINFORMATION, OTHER
       }
+    - Response: ApiResponse<Void> ("Content reported for moderation review")
 
-44. GET  /api/v1/admin/community/flags
-    --> Used by moderators to review queue of flagged reviews, questions, and answers.
-    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
-
-45. PATCH /api/v1/admin/community/flags/{id}/decision
-    --> Used by moderators to decide on reported content (RESOLVED hides content, DISMISSED keeps content).
-    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
-    - Request Body:
-      {
-        "status": "RESOLVED", // or "DISMISSED"
-        "reviewerNotes": "Confirmed guidelines violation. Review hidden."
-      }
 
 --------------------------------------------------------------------------------
-MODULE 13: OPENSTREETMAP (OSM) AUTOMATED BATCH INGESTION ENGINE
+MODULE 10: CROWDSOURCING & USER CONTRIBUTIONS (2 ENDPOINTS)
 --------------------------------------------------------------------------------
 
-46. POST /api/v1/admin/ingest/osm/city
-    --> Used by Moderators and Admins to automatically query Overpass API and bulk-ingest all mosques in a city.
-    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+56. POST /api/v1/mosques/submissions
+    --> Used by community users to submit a brand new mosque listing to the platform.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Reward: Submitter automatically receives +100 contribution points & 'Pioneer' badge upon approval.
+    - Notification: Submitter receives real-time confirmation notification upon queueing.
     - Request Body:
       {
-        "city": "London",
+        "name": "Birmingham Central Mosque",
+        "description": "Historic mosque in Birmingham",
+        "address": "180 Belgrave Middleway",
+        "city": "Birmingham",
         "country": "United Kingdom",
-        "dryRun": false // Set true to preview elements without modifying database
+        "latitude": 52.4678,
+        "longitude": -1.8906,
+        "contactPhone": "+44 121 440 5355",
+        "websiteUrl": "https://birminghamcentralmosque.org.uk",
+        "liveStreamUrl": "https://youtube.com/live/stream-id",
+        "facilityCodes": ["PARKING", "WUDU_AREA", "WOMENS_SECTION"],
+        "imageUrls": ["https://images.unsplash.com/mosque.jpg"]
       }
-    - Response: { totalElementsFetched, mosquesInserted, duplicatesSkipped, facilitiesAttached, insertedMosqueNames, durationMs }
+    - Response: ApiResponse<MosqueSubmissionResponseDto>
 
-47. POST /api/v1/admin/ingest/osm/radius
-    --> Used to bulk-ingest mosques surrounding a center GPS coordinate within a given radius in meters.
-    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+57. POST /api/v1/mosques/{id}/suggest-edit
+    --> Used by community users to suggest corrections or updates to an existing mosque profile.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Path Variable: id (Mosque UUID)
+    - Reward: Contributor receives +50 points upon approval.
+    - Request Body: Suggested edits payload (fields, rationale, updated facilities/photos)
+    - Response: ApiResponse<MosqueSubmissionResponseDto>
+
+
+--------------------------------------------------------------------------------
+MODULE 11: MOSQUE CLAIMING & GOVERNANCE (3 ENDPOINTS)
+--------------------------------------------------------------------------------
+
+58. POST  /api/v1/mosques/{id}/claim
+    --> Used by authorized mosque trustees, imams, or committee members to claim administrative ownership.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Path Variable: id (Mosque UUID)
+    - Request Body:
+      {
+        "officialRole": "Imam / Trustee / Committee Member",
+        "contactEmail": "trustee@mosque.org",
+        "contactPhone": "+44 20 7650 3000",
+        "verificationDocumentUrl": "https://storage.openmosque.org/proof-id.pdf", // PDF/PNG/JPG up to 5MB
+        "notes": "Registered Charity #123456"
+      }
+    - Response: ApiResponse<MosqueClaimResponseDto> (Status: PENDING)
+
+59. GET   /api/v1/admin/mosques/claims
+    --> Used by moderators and super admins to view the queue of pending mosque ownership claims.
+    - Access: Moderator / Super Admin (Requires MODERATOR or SUPER_ADMIN role)
+    - Query Parameters: status (Optional: PENDING, APPROVED, REJECTED; default: PENDING)
+    - Response: ApiResponse<PageResponse<MosqueClaimResponseDto>>
+
+60. PATCH /api/v1/admin/mosques/claims/{id}/decision
+    --> Used by moderators and super admins to approve or reject a mosque ownership claim.
+    - Access: Moderator / Super Admin (Requires MODERATOR or SUPER_ADMIN role)
+    - Path Variable: id (Claim UUID)
+    - Notes: On approval, claimant is granted MOSQUE_ADMIN role and mapped to the mosque.
+    - Request Body:
+      {
+        "status": "APPROVED", // or "REJECTED"
+        "adminNotes": "Verified against Charity Commission registry"
+      }
+    - Response: ApiResponse<MosqueClaimResponseDto>
+
+
+--------------------------------------------------------------------------------
+MODULE 12: MEDIA & DOCUMENT ASSET STORAGE (4 ENDPOINTS)
+--------------------------------------------------------------------------------
+
+61. POST /api/v1/media/upload-url
+    --> Used for generating secure, pre-signed upload URLs for direct client-to-storage uploads.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Request Body:
+      {
+        "fileName": "mosque-exterior.jpg",
+        "contentType": "image/jpeg", // image/jpeg, image/png, image/webp, application/pdf
+        "category": "MOSQUE_PHOTO"   // MOSQUE_PHOTO, CLAIM_PROOF, EVENT_BANNER
+      }
+    - Response: ApiResponse<UploadUrlResponseDto> (uploadUrl, publicFileUrl, objectKey)
+
+62. POST /api/v1/media/upload-direct
+    --> Used for direct multipart/form-data binary upload (e.g. claim documents or images up to 5MB).
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Request: Content-Type: multipart/form-data
+      - file: MultipartFile (Binary payload)
+      - category: String ("CLAIM_PROOF", "MOSQUE_PHOTO", "EVENT_BANNER")
+    - Response: ApiResponse<UploadUrlResponseDto> (publicFileUrl, objectKey)
+
+63. PUT  /api/v1/media/upload
+    --> Used as the local/dev binary storage sink receiving PUT requests for uploaded files.
+    - Access: Public (Development / local file storage)
+    - Alias: PUT /api/v1/media/mock-upload
+    - Request: Raw binary file payload in request body
+    - Response: ApiResponse<Void> ("File saved successfully")
+
+64. GET  /api/v1/media/files/{filename}
+    --> Used for serving stored public images, event banners, and proof documents.
+    - Access: Public (No authentication required)
+    - Response: Image / PDF binary content with appropriate Content-Type
+
+
+--------------------------------------------------------------------------------
+MODULE 13: IN-APP NOTIFICATIONS & FCM PUSH (7 ENDPOINTS)
+--------------------------------------------------------------------------------
+
+65. GET    /api/v1/users/me/notifications
+    --> Used for fetching the user's recent in-app notification history (submission status, claim updates).
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Query Parameters: page (default 0), size (default 20)
+    - Response: ApiResponse<PageResponse<NotificationDto>>
+
+66. GET    /api/v1/users/me/notifications/unread-count
+    --> Used by top navigation and sidebar badges to display unread notification counter.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Response: ApiResponse<Long> (Count of unread notifications, e.g. 3)
+
+67. PATCH  /api/v1/users/me/notifications/{id}/read
+    --> Used for marking a single in-app notification as read.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Path Variable: id (Notification UUID)
+    - Response: ApiResponse<Void>
+
+68. PATCH  /api/v1/users/me/notifications/read-all
+    --> Used for marking all of the user's in-app notifications as read at once.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Response: ApiResponse<Void>
+
+69. POST   /api/v1/users/me/notifications/devices
+    --> Used for registering a browser or mobile Firebase Cloud Messaging (FCM) device push token.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Request Body:
+      {
+        "fcmToken": "FIREBASE_MESSAGING_DEVICE_TOKEN",
+        "deviceType": "WEB", // WEB, ANDROID, IOS
+        "deviceModel": "Chrome 128 / Windows 11"
+      }
+    - Response: ApiResponse<Void>
+
+70. DELETE /api/v1/users/me/notifications/devices/{fcmToken}
+    --> Used for unregistering an FCM push device token on user logout.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Path Variable: fcmToken (FCM Token string)
+    - Response: ApiResponse<Void>
+
+71. GET    /api/v1/users/me/notifications/devices
+    --> Used for inspecting all active devices registered to the user for push alerts.
+    - Access: Authenticated (Requires Bearer token or HttpOnly Cookie)
+    - Response: ApiResponse<List<UserDeviceDto>>
+
+
+--------------------------------------------------------------------------------
+MODULE 14: OPENSTREETMAP (OSM) BULK INGESTION (3 ENDPOINTS)
+--------------------------------------------------------------------------------
+
+72. POST /api/v1/admin/ingest/osm/city
+    --> Used by administrators to trigger Overpass API bulk ingestion of mosques for an entire city.
+    - Access: Moderator / Super Admin (Requires MODERATOR or SUPER_ADMIN role)
+    - Request Body:
+      {
+        "cityName": "Manchester",
+        "country": "United Kingdom"
+      }
+    - Response: ApiResponse<OsmIngestionResultDto> (importedCount, skippedCount, errors)
+
+73. POST /api/v1/admin/ingest/osm/radius
+    --> Used by administrators to ingest mosques within a geographic radius around center coordinates.
+    - Access: Moderator / Super Admin (Requires MODERATOR or SUPER_ADMIN role)
     - Request Body:
       {
         "latitude": 51.5074,
         "longitude": -0.1278,
-        "radiusMeters": 15000,
-        "defaultCity": "London",
-        "defaultCountry": "United Kingdom",
-        "dryRun": false
+        "radiusMeters": 5000
       }
-    - Response: { totalElementsFetched, mosquesInserted, duplicatesSkipped, facilitiesAttached, insertedMosqueNames, durationMs }
+    - Response: ApiResponse<OsmIngestionResultDto>
 
-48. POST /api/v1/admin/ingest/osm/bbox
-    --> Used to bulk-ingest mosques within a geographic rectangular bounding box [south, west, north, east].
-    - Access: Restricted (Requires ROLE_MODERATOR or ROLE_SUPER_ADMIN)
+74. POST /api/v1/admin/ingest/osm/bbox
+    --> Used by administrators to ingest mosques within a geographic bounding box [minLat, minLon, maxLat, maxLon].
+    - Access: Moderator / Super Admin (Requires MODERATOR or SUPER_ADMIN role)
     - Request Body:
       {
-        "south": 51.40,
-        "west": -0.30,
-        "north": 51.60,
-        "east": 0.10,
-        "defaultCity": "Greater London",
-        "defaultCountry": "United Kingdom",
-        "dryRun": false
+        "minLatitude": 51.48,
+        "minLongitude": -0.20,
+        "maxLatitude": 51.55,
+        "maxLongitude": -0.05
       }
-    - Response: { totalElementsFetched, mosquesInserted, duplicatesSkipped, facilitiesAttached, insertedMosqueNames, durationMs }
+    - Response: ApiResponse<OsmIngestionResultDto>
 
+
+--------------------------------------------------------------------------------
+MODULE 15: CONTENT MODERATION & WORKFLOWS (5 ENDPOINTS)
+--------------------------------------------------------------------------------
+
+75. GET   /api/v1/admin/moderation/counts
+    --> Used by Admin sidebar to display live badges for pending Submissions, Claims, and Flags.
+    - Access: Moderator / Super Admin (Requires MODERATOR or SUPER_ADMIN role)
+    - Response:
+      {
+        "success": true,
+        "message": "Pending moderation counts retrieved successfully",
+        "data": {
+          "pendingSubmissions": 4,
+          "pendingClaims": 1,
+          "pendingFlags": 2,
+          "totalPending": 7
+        }
+      }
+
+76. GET   /api/v1/admin/moderation/submissions
+    --> Used by moderators to list proposed mosques and suggested profile edits.
+    - Access: Moderator / Super Admin (Requires MODERATOR or SUPER_ADMIN role)
+    - Query Parameters:
+      - status: PENDING, APPROVED, REJECTED (default: PENDING)
+      - type: NEW_MOSQUE, EDIT_SUGGESTION (Optional filter)
+    - Response: ApiResponse<PageResponse<MosqueSubmissionResponseDto>>
+
+77. PATCH /api/v1/admin/moderation/submissions/{id}/decision
+    --> Used by moderators to approve or reject a crowdsourced submission or suggested edit.
+    - Access: Moderator / Super Admin (Requires MODERATOR or SUPER_ADMIN role)
+    - Path Variable: id (Submission UUID)
+    - Notes: Upon approval, new mosque is activated in public directory and submitter receives +100 points.
+    - Request Body:
+      {
+        "status": "APPROVED", // or "REJECTED"
+        "moderatorNotes": "Verified phone number and official charity registration"
+      }
+    - Response: ApiResponse<MosqueSubmissionResponseDto>
+
+78. GET   /api/v1/admin/community/flags
+    --> Used by moderators to inspect the queue of user-reported content (reviews, Q&A).
+    - Access: Moderator / Super Admin (Requires MODERATOR or SUPER_ADMIN role)
+    - Query Parameters: status (PENDING, RESOLVED, DISMISSED; default: PENDING)
+    - Response: ApiResponse<PageResponse<ContentFlagResponseDto>>
+
+79. PATCH /api/v1/admin/community/flags/{id}/decision
+    --> Used by moderators to resolve a report by deleting the abusive content or dismissing the flag.
+    - Access: Moderator / Super Admin (Requires MODERATOR or SUPER_ADMIN role)
+    - Path Variable: id (Flag UUID)
+    - Request Body:
+      {
+        "action": "DELETE_CONTENT", // DELETE_CONTENT, DISMISS_FLAG, BAN_USER
+        "adminNotes": "Confirmed defamatory language; review removed"
+      }
+    - Response: ApiResponse<Void>
+
+
+--------------------------------------------------------------------------------
+MODULE 16: PLATFORM & MOSQUE ANALYTICS (2 ENDPOINTS)
+--------------------------------------------------------------------------------
+
+80. GET /api/v1/mosque-admin/mosques/{id}/stats
+    --> Used by mosque administrators to view operational metrics for their assigned mosque.
+    - Access: Mosque Admin / Moderator / Super Admin (Requires MOSQUE_ADMIN, MODERATOR, or SUPER_ADMIN role)
+    - Path Variable: id (Mosque UUID)
+    - Metrics: Total favorites, total reviews, average star rating, upcoming events count, Q&A volume
+    - Response: ApiResponse<MosqueAdminStatsDto>
+
+81. GET /api/v1/admin/stats
+    --> Used by platform administrators for high-level ecosystem health and key performance indicators.
+    - Access: Moderator / Super Admin (Requires MODERATOR or SUPER_ADMIN role)
+    - Metrics: Total active mosques, total verified users, total reviews, pending submissions, system health
+    - Response: ApiResponse<PlatformStatsDto>
+
+
+--------------------------------------------------------------------------------
+MODULE 17: USER IDENTITY ADMINISTRATION (2 ENDPOINTS)
+--------------------------------------------------------------------------------
+
+82. GET   /api/v1/admin/users
+    --> Used by super administrators to search, filter, and view all registered platform accounts.
+    - Access: Super Admin Only (Requires SUPER_ADMIN role)
+    - Query Parameters:
+      - query: string (keyword matching name or email)
+      - role: string (USER, MOSQUE_ADMIN, MODERATOR, SUPER_ADMIN)
+      - page: integer (0-indexed, default 0)
+      - size: integer (default 20)
+    - Response: ApiResponse<PageResponse<UserResponseDto>>
+
+83. PATCH /api/v1/admin/users/{id}/role
+    --> Used by super administrators to promote or demote user roles across the platform.
+    - Access: Super Admin Only (Requires SUPER_ADMIN role)
+    - Path Variable: id (User UUID)
+    - Request Body:
+      {
+        "role": "MODERATOR" // USER, MOSQUE_ADMIN, MODERATOR, SUPER_ADMIN
+      }
+    - Response: ApiResponse<UserResponseDto>
+
+
+================================================================================
+COMPLETE ENDPOINTS SUMMARY MATRIX & ROUTE ALIAS INDEX
+================================================================================
+Total Route Mappings: 91 Endpoints Across 24 Controllers
+Authentication Matrix:
+- Public Endpoints (No Auth Required): 27 Mappings
+  (OpenAPI, Swagger, Actuator, Facilities, Public Mosques Search/Nearby/Details,
+   Public Events/Khutbahs, Prayer Times, Methods, Reviews/Ratings/Questions,
+   User Badges, Auth Session/Logout, Binary Upload Sink, Public Media Files)
+- Authenticated User Endpoints (User Bearer Token / Cookie): 33 Mappings
+  (Users Me, Preferred Location, 2FA Management, Favorites CRUD, In-App Notifications,
+   FCM Devices, Write Review, Ask Question, Answer, Flag Content, Submit Mosque,
+   Suggest Edit, Submit Claim, Upload URL & Direct Upload)
+- Mosque Administrator Endpoints (MOSQUE_ADMIN / SUPER_ADMIN): 14 Mappings
+  (Update Mosque Profile, Mosque Stats, Prayer Config GET/PUT, Iqamah Schedule GET/PUT,
+   Events Create/Update/Delete, Khutbahs Create/Update/Delete)
+- Moderator Endpoints (MODERATOR / SUPER_ADMIN): 13 Mappings
+  (Moderation Counts, Submissions List & Decisions, Claims List & Decisions,
+   Community Flags List & Decisions, OSM Ingestion City/Radius/BoundingBox, Platform Stats)
+- Super Admin Only Endpoints (SUPER_ADMIN): 4 Mappings
+  (List All Users, Update User Role, System Hardening)
 ================================================================================
