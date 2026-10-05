@@ -24,6 +24,7 @@
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
         <springdoc.version>2.6.0</springdoc.version>
         <firebase.version>9.3.0</firebase.version>
+        <aws.sdk.version>2.25.70</aws.sdk.version>
     </properties>
 
     <dependencies>
@@ -119,7 +120,25 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- AWS S3 SDK for Cloudflare R2 Object Storage -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
     </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${aws.sdk.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
         <plugins>

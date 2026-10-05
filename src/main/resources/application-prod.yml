@@ -36,6 +36,8 @@ spring:
     type: ${SPRING_CACHE_TYPE:simple}
 
 app:
+  storage:
+    provider: ${APP_STORAGE_PROVIDER:r2}
   rate-limit:
     enabled: true
     backend: ${RATE_LIMIT_BACKEND:local}

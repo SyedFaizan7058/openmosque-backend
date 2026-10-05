@@ -97,3 +97,11 @@ app:
       upload-base-url: ${APP_STORAGE_UPLOAD_BASE_URL:http://localhost:8080/api/v1/media/upload}
       public-base-url: ${APP_STORAGE_PUBLIC_BASE_URL:http://localhost:8080/api/v1/media/files}
       max-file-size-mb: ${APP_STORAGE_MAX_FILE_SIZE_MB:15}
+    r2:
+      access-key: ${CLOUDFLARE_R2_ACCESS_KEY:}
+      secret-key: ${CLOUDFLARE_R2_SECRET_KEY:}
+      endpoint: ${CLOUDFLARE_R2_ENDPOINT:}
+      bucket: ${CLOUDFLARE_R2_BUCKET:}
+      public-base-url: ${CLOUDFLARE_R2_PUBLIC_URL:}
+      max-file-size-mb: ${APP_STORAGE_MAX_FILE_SIZE_MB:15}
+      presigned-url-duration-minutes: ${APP_STORAGE_PRESIGNED_DURATION_MINUTES:15}

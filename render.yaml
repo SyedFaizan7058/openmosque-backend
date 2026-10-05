@@ -11,6 +11,8 @@ services:
         value: prod
       - key: PORT
         value: 8080
+      - key: APP_STORAGE_PROVIDER
+        value: r2
       - key: SPRING_DATASOURCE_URL
         sync: false
       - key: SPRING_DATASOURCE_USERNAME
