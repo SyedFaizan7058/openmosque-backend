@@ -46,7 +46,7 @@ app:
       enabled: true
       dev-mock-auth: false
   cors:
-    allowed-origins: "${APP_CORS_ALLOWED_ORIGINS:https://openmosque.org,https://openmosque.vercel.app}"
+    allowed-origins: "${APP_CORS_ALLOWED_ORIGINS:https://openmosque.org,https://openmosque-frontend.vercel.app}"
 
 management:
   health:
