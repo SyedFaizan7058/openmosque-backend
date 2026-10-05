@@ -131,16 +131,33 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
     /**
      * Resolves client IP address securely.
-     * Only trusts X-Forwarded-For if request originated from an explicitly configured trusted reverse proxy.
+     * Handles reverse proxies (Render, Cloudflare, AWS ALB, Nginx) by inspecting standard forward headers.
+     * If trustedProxies is explicitly populated, only those reverse proxy addresses are trusted.
+     * Otherwise, if empty or containing "*", forward headers are trusted by default in cloud/container environments.
      */
     private String resolveClientIp(HttpServletRequest request) {
         String remoteAddr = request.getRemoteAddr();
 
-        if (properties.getTrustedProxies() != null && properties.getTrustedProxies().contains(remoteAddr)) {
+        boolean trustProxy = properties.getTrustedProxies() == null
+                || properties.getTrustedProxies().isEmpty()
+                || properties.getTrustedProxies().contains("*")
+                || properties.getTrustedProxies().contains(remoteAddr);
+
+        if (trustProxy) {
+            String cfConnectingIp = request.getHeader("CF-Connecting-IP");
+            if (cfConnectingIp != null && !cfConnectingIp.isBlank()) {
+                return cfConnectingIp.trim();
+            }
+
             String forwarded = request.getHeader("X-Forwarded-For");
             if (forwarded != null && !forwarded.isBlank()) {
-                // Return first hop IP
+                // The leftmost IP in X-Forwarded-For is the originating client
                 return forwarded.split(",")[0].trim();
+            }
+
+            String realIp = request.getHeader("X-Real-IP");
+            if (realIp != null && !realIp.isBlank()) {
+                return realIp.trim();
             }
         }
 

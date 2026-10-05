@@ -3,6 +3,7 @@
 # ==============================================================================
 server:
   port: 8080
+  forward-headers-strategy: framework
   servlet:
     context-path: /
 
@@ -84,7 +85,15 @@ app:
       dev-mock-auth: ${APP_SECURITY_DEV_MOCK_AUTH:false}
       
   cors:
-    allowed-origins: "${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,https://*.vercel.app,http://localhost:19006,exp://*}"
+    allowed-origins: "${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8081,https://*.vercel.app,http://localhost:19006,exp://*}"
     allowed-methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
     allowed-headers: "*"
     allow-credentials: true
+
+  storage:
+    provider: ${APP_STORAGE_PROVIDER:local}
+    local:
+      upload-dir: ${APP_STORAGE_UPLOAD_DIR:./uploads}
+      upload-base-url: ${APP_STORAGE_UPLOAD_BASE_URL:http://localhost:8080/api/v1/media/upload}
+      public-base-url: ${APP_STORAGE_PUBLIC_BASE_URL:http://localhost:8080/api/v1/media/files}
+      max-file-size-mb: ${APP_STORAGE_MAX_FILE_SIZE_MB:15}

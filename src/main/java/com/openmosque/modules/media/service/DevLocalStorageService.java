@@ -41,8 +41,8 @@ public class DevLocalStorageService implements StorageService {
                 cleanFileName);
 
         Instant expiresAt = Instant.now().plus(15, ChronoUnit.MINUTES);
-        String uploadUrl = String.format("http://localhost:8080/api/v1/media/upload?key=%s", objectKey);
-        String publicUrl = String.format("%s/%s", properties.getPublicBaseUrl(), objectKey);
+        String uploadUrl = buildUploadUrl(objectKey);
+        String publicUrl = buildPublicUrl(objectKey);
 
         log.info("Generated local upload URL for user '{}', file '{}' -> key: '{}'",
                 user.getEmail(), request.getFileName(), objectKey);
@@ -78,7 +78,7 @@ public class DevLocalStorageService implements StorageService {
             throw new BadRequestException("Could not persist file to disk: " + e.getMessage());
         }
 
-        return String.format("%s/%s", properties.getPublicBaseUrl(), objectKey);
+        return buildPublicUrl(objectKey);
     }
 
     @Override
@@ -115,6 +115,25 @@ public class DevLocalStorageService implements StorageService {
             }
         }
         return false;
+    }
+
+    private String buildUploadUrl(String objectKey) {
+        String base = properties.getUploadBaseUrl() != null && !properties.getUploadBaseUrl().isBlank()
+                ? properties.getUploadBaseUrl().trim()
+                : "http://localhost:8080/api/v1/media/upload";
+        return base.contains("?")
+                ? String.format("%s&key=%s", base, objectKey)
+                : String.format("%s?key=%s", base, objectKey);
+    }
+
+    private String buildPublicUrl(String objectKey) {
+        String base = properties.getPublicBaseUrl() != null && !properties.getPublicBaseUrl().isBlank()
+                ? properties.getPublicBaseUrl().trim()
+                : "http://localhost:8080/api/v1/media/files";
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return String.format("%s/%s", base, objectKey);
     }
 
     private void validateContentType(String contentType) {

@@ -22,6 +22,11 @@ public class LocalStorageProperties {
     private String publicBaseUrl = "http://localhost:8080/api/v1/media/files";
 
     /**
+     * Public endpoint URL used by clients to upload files via pre-signed URL.
+     */
+    private String uploadBaseUrl = "http://localhost:8080/api/v1/media/upload";
+
+    /**
      * Maximum allowed upload size in Megabytes.
      */
     private long maxFileSizeMb = 15;

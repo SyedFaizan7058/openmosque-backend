@@ -48,7 +48,7 @@ public class SecurityConfig {
     private final com.openmosque.security.ratelimit.RateLimitingFilter rateLimitingFilter;
     private final ObjectMapper objectMapper;
 
-    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173}")
+    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173,http://localhost:8081}")
     private String allowedOrigins;
 
     @Value("${app.cors.allowed-methods:GET,POST,PUT,PATCH,DELETE,OPTIONS}")

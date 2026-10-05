@@ -1,10 +1,11 @@
-﻿services:
+services:
   - type: web
     name: openmosque-backend
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
     region: singapore
+    healthCheckPath: /actuator/health
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
@@ -29,4 +30,8 @@
       - key: CLOUDFLARE_R2_BUCKET
         sync: false
       - key: CLOUDFLARE_R2_PUBLIC_URL
+        sync: false
+      - key: APP_STORAGE_UPLOAD_BASE_URL
+        sync: false
+      - key: APP_STORAGE_PUBLIC_BASE_URL
         sync: false
