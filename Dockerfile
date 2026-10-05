@@ -1,4 +1,4 @@
-﻿# Multi-stage Docker build for Spring Boot Backend
+# Multi-stage Docker build for Spring Boot Backend
 FROM maven:3.9.8-eclipse-temurin-17 AS build
 WORKDIR /app
 COPY pom.xml .
@@ -13,4 +13,4 @@ USER spring:spring
 COPY --from=build /app/target/open-mosque-backend-*.jar app.jar
 ENV PORT=8080
 EXPOSE 8080
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-XX:+UseG1GC", "-Dspring.profiles.active=prod", "-Dserver.port=${PORT}", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:+UseSerialGC", "-Xmx280m", "-Xss512k", "-XX:MaxMetaspaceSize=128m", "-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1", "-Dspring.profiles.active=prod", "-Dserver.port=${PORT}", "-jar", "app.jar"]

@@ -27,6 +27,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
+@org.springframework.context.annotation.Lazy
 @RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.storage.provider", havingValue = "r2")
 public class R2StorageService implements StorageService {

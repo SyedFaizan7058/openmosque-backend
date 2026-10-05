@@ -27,6 +27,7 @@ public class R2Config {
     private final R2StorageProperties properties;
 
     @Bean
+    @org.springframework.context.annotation.Lazy
     public S3Client s3Client() {
         log.info("Initializing Cloudflare R2 S3Client for bucket '{}' at endpoint '{}'",
                 properties.getBucket(), properties.getEndpoint());
@@ -44,6 +45,7 @@ public class R2Config {
     }
 
     @Bean
+    @org.springframework.context.annotation.Lazy
     public S3Presigner s3Presigner() {
         log.info("Initializing Cloudflare R2 S3Presigner for endpoint '{}'", properties.getEndpoint());
 

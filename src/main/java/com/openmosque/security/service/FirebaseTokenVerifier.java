@@ -92,9 +92,15 @@ public class FirebaseTokenVerifier {
         try {
             // 1. Direct JSON String via environment variable (e.g. Render Dashboard secret)
             if (StringUtils.hasText(firebaseCredentialsJson)) {
-                log.info("Loading Firebase credentials from FIREBASE_CREDENTIALS_JSON environment variable.");
-                try (InputStream is = new ByteArrayInputStream(firebaseCredentialsJson.getBytes(StandardCharsets.UTF_8))) {
+                String cleanJson = firebaseCredentialsJson.trim();
+                if (cleanJson.startsWith("'") && cleanJson.endsWith("'") && cleanJson.length() > 2) {
+                    cleanJson = cleanJson.substring(1, cleanJson.length() - 1).trim();
+                }
+                log.info("Loading Firebase credentials from FIREBASE_CREDENTIALS_JSON environment variable ({} chars).", cleanJson.length());
+                try (InputStream is = new ByteArrayInputStream(cleanJson.getBytes(StandardCharsets.UTF_8))) {
                     return GoogleCredentials.fromStream(is);
+                } catch (Exception e) {
+                    log.error("Failed to parse FIREBASE_CREDENTIALS_JSON string: {}", e.getMessage());
                 }
             }
 
